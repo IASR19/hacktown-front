@@ -1,5 +1,6 @@
-import { LayoutDashboard, MapPin, Clock, Mic2, Calendar, BarChart3, Lock } from 'lucide-react';
+import { LayoutDashboard, MapPin, Clock, Mic2, Calendar, BarChart3, Lock, LogOut, User } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
+import { useNavigate } from 'react-router-dom';
 import {
   Sidebar,
   SidebarContent,
@@ -9,11 +10,13 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarFooter,
 } from '@/components/ui/sidebar';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 const menuItems = [
-  { title: 'Dashboard', url: '/', icon: LayoutDashboard, color: 'text-hacktown-cyan' },
+  { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard, color: 'text-hacktown-cyan' },
   { title: 'Dias', url: '/days', icon: Calendar, color: 'text-hacktown-purple' },
   { title: 'Venues', url: '/venues', icon: MapPin, color: 'text-hacktown-pink' },
   { title: 'Slots', url: '/slots', icon: Clock, color: 'text-hacktown-cyan' },
@@ -22,6 +25,15 @@ const menuItems = [
 ];
 
 export function AppSidebar() {
+  const navigate = useNavigate();
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    navigate('/login');
+  };
+
   return (
     <Sidebar className="border-r border-sidebar-border/50 glass">
       <SidebarContent className="pt-6">
@@ -46,7 +58,7 @@ export function AppSidebar() {
                     ) : (
                       <NavLink 
                         to={item.url} 
-                        end={item.url === '/'} 
+                        end={item.url === '/dashboard'} 
                         className="flex items-center gap-3 px-4 py-3 rounded-xl text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-all duration-200 group"
                         activeClassName="bg-gradient-to-r from-hacktown-cyan/20 to-hacktown-pink/10 text-sidebar-foreground border border-hacktown-cyan/30 neon-glow"
                       >
@@ -61,6 +73,28 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter className="border-t border-sidebar-border/50 p-4">
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 px-2">
+            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-hacktown-cyan to-hacktown-pink flex items-center justify-center">
+              <User className="h-4 w-4 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-sidebar-foreground truncate">{user.name || 'Usuário'}</p>
+              <p className="text-xs text-muted-foreground truncate">{user.email || ''}</p>
+            </div>
+          </div>
+          <Button 
+            onClick={handleLogout} 
+            variant="outline" 
+            size="sm" 
+            className="w-full justify-start gap-2 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
+          >
+            <LogOut className="h-4 w-4" />
+            Sair
+          </Button>
+        </div>
+      </SidebarFooter>
     </Sidebar>
   );
 }

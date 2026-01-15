@@ -1,22 +1,20 @@
-# Welcome to your Lovable project
+# Hacktown - Sistema de Gestão de Capacidade
 
-## Project info
+## Sobre o Projeto
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+Sistema de gestão de capacidade para eventos do Hacktown. Permite gerenciar venues, slots, atividades e visualizar métricas em tempo real.
 
-## How can I edit this code?
+## Tecnologias
 
-There are several ways of editing your application.
+- React + TypeScript
+- Vite
+- TailwindCSS + Shadcn UI
+- React Query
+- Recharts
 
-**Use Lovable**
+## Como Editar
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+Clone este repositório e faça as alterações usando sua IDE preferida.
 
 The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
 

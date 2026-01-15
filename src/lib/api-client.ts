@@ -15,16 +15,28 @@ export class ApiClient {
     
     console.log(`🌐 API Request: ${options?.method || 'GET'} ${url}`);
     
+    // Obter token do localStorage
+    const token = localStorage.getItem('token');
+    
     const config: RequestInit = {
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         ...options?.headers,
       },
     };
 
     try {
       const response = await fetch(url, config);
+
+      // Se receber 401, redirecionar para login
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+        throw new Error('Sessão expirada. Faça login novamente.');
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));

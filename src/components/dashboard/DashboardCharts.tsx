@@ -79,6 +79,7 @@ export function DashboardCharts({ venuesWithSlots }: DashboardChartsProps) {
         });
       });
     });
+    console.log('📊 Capacity per slot data:', slotCapacities.length, slotCapacities.slice(0, 3));
     return slotCapacities.slice(0, 15);
   }, [venuesWithSlots]);
 
@@ -277,7 +278,44 @@ export function DashboardCharts({ venuesWithSlots }: DashboardChartsProps) {
     </ResponsiveContainer>
   );
 
+  const getCurrentChartData = () => {
+    switch (selectedChart) {
+      case 'capacityPerSlot': return capacityPerSlotData;
+      case 'slotsByDay': return slotsByDayData;
+      case 'slotsByTime': return slotsByTimeData;
+      case 'slotsByStatus': return slotsByStatusData;
+      case 'slotsByNucleo': return slotsByNucleoData;
+      case 'venuesByPorte': return venuesByPorteData;
+      case 'venuesByDay': return venuesByDayData;
+      case 'venuesByTime': return venuesByTimeData;
+      case 'venuesByNucleo': return venuesByNucleoData;
+      case 'venuesByStructure': return venuesByStructureData;
+      default: return [];
+    }
+  };
+
+  const hasData = getCurrentChartData().length > 0;
+  const totalSlots = venuesWithSlots.reduce((sum, v) => sum + v.slots.length, 0);
+
   const renderSelectedChart = () => {
+    if (!hasData) {
+      return (
+        <div className="h-full flex flex-col items-center justify-center text-center space-y-4">
+          <BarChart3 className="h-16 w-16 text-muted-foreground/40" />
+          <div className="space-y-2">
+            <p className="text-lg font-medium text-muted-foreground">
+              Sem dados para exibir
+            </p>
+            <p className="text-sm text-muted-foreground/70 max-w-md">
+              {totalSlots === 0 
+                ? "Configure os dias do evento e crie slots para visualizar os gráficos."
+                : "Não há dados disponíveis para este gráfico. Verifique os filtros aplicados."}
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     switch (selectedChart) {
       case 'capacityPerSlot':
         return renderBarChart(capacityPerSlotData, 'capacidade', COLORS.cyan);
@@ -304,8 +342,44 @@ export function DashboardCharts({ venuesWithSlots }: DashboardChartsProps) {
     }
   };
 
-  if (venuesWithSlots.length === 0 || selectedDays.length === 0) {
-    return null;
+  if (venuesWithSlots.length === 0) {
+    return (
+      <Card className="glass hover:neon-glow transition-all duration-500">
+        <CardContent className="py-12">
+          <div className="flex flex-col items-center justify-center text-center space-y-4">
+            <BarChart3 className="h-16 w-16 text-muted-foreground/40" />
+            <div className="space-y-2">
+              <p className="text-lg font-medium text-muted-foreground">
+                Nenhum local cadastrado
+              </p>
+              <p className="text-sm text-muted-foreground/70 max-w-md">
+                Comece cadastrando venues na página "Venues" para visualizar estatísticas e gráficos.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (selectedDays.length === 0) {
+    return (
+      <Card className="glass hover:neon-glow transition-all duration-500">
+        <CardContent className="py-12">
+          <div className="flex flex-col items-center justify-center text-center space-y-4">
+            <BarChart3 className="h-16 w-16 text-muted-foreground/40" />
+            <div className="space-y-2">
+              <p className="text-lg font-medium text-muted-foreground">
+                Nenhum dia selecionado
+              </p>
+              <p className="text-sm text-muted-foreground/70 max-w-md">
+                Configure os dias do evento na página "Dias" para visualizar os gráficos.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (

@@ -62,6 +62,13 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
   // Load data from API on mount
   useEffect(() => {
     const loadData = async () => {
+      // Não carregar se não houver token (usuário não autenticado)
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setIsLoading(false);
+        return;
+      }
+
       try {
         console.log('🔄 Carregando dados da API...');
         setIsLoading(true);
