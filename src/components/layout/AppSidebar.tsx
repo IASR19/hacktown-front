@@ -50,10 +50,7 @@ export function AppSidebar() {
                       <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-sidebar-foreground/40 cursor-not-allowed">
                         <item.icon className="h-5 w-5 text-muted-foreground/40" />
                         <span className="font-medium">{item.title}</span>
-                        <Badge variant="outline" className="ml-auto text-[10px] py-0 px-1.5 border-amber-500/30 text-amber-500/70">
-                          <Lock className="h-2.5 w-2.5 mr-1" />
-                          Em breve
-                        </Badge>
+                        <Lock className="h-4 w-4 ml-auto text-amber-500/70" />
                       </div>
                     ) : (
                       <NavLink 

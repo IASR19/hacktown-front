@@ -70,12 +70,15 @@ export function DashboardCharts({ venuesWithSlots }: DashboardChartsProps) {
 
   // 1. Capacidade por slot (soma da capacidade de venues por slot)
   const capacityPerSlotData = useMemo(() => {
-    const slotCapacities: { name: string; capacidade: number }[] = [];
+    const slotCapacities: { name: string; capacidade: number; day?: string }[] = [];
     venuesWithSlots.forEach(venue => {
       venue.slots.forEach(slot => {
+        // Incluir o dia no label
+        const dayLabel = WEEKDAY_SHORT_LABELS[slot.day];
         slotCapacities.push({
           name: `${slot.startTime}-${slot.endTime}`,
           capacidade: venue.capacity,
+          day: dayLabel,
         });
       });
     });
@@ -222,9 +225,30 @@ export function DashboardCharts({ venuesWithSlots }: DashboardChartsProps) {
       .map(([name, venues]) => ({ name: `${name}h`, venues: venues.size }));
   }, [venuesWithSlots]);
 
-  const renderBarChart = (data: { name: string; [key: string]: string | number }[], dataKey: string, color: string) => (
+  // Custom label para mostrar o dia acima das barras
+  const renderCustomLabel = (props: any) => {
+    const { x, y, width, index } = props;
+    const item = capacityPerSlotData[index];
+    
+    if (!item?.day) return null;
+    
+    return (
+      <text 
+        x={x + width / 2} 
+        y={y - 8} 
+        fill="hsl(330, 100%, 60%)" 
+        textAnchor="middle" 
+        fontSize={12}
+        fontWeight={700}
+      >
+        {item.day}
+      </text>
+    );
+  };
+
+  const renderBarChart = (data: { name: string; [key: string]: string | number }[], dataKey: string, color: string, showDayLabel = false) => (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 20 }}>
+      <BarChart data={data} margin={{ top: showDayLabel ? 30 : 20, right: 30, left: 0, bottom: 20 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 20%, 18%)" />
         <XAxis dataKey="name" tick={{ fill: 'hsl(220, 15%, 55%)', fontSize: 12 }} />
         <YAxis tick={{ fill: 'hsl(220, 15%, 55%)', fontSize: 12 }} />
@@ -237,8 +261,19 @@ export function DashboardCharts({ venuesWithSlots }: DashboardChartsProps) {
           }}
           labelStyle={{ color: 'hsl(210, 20%, 95%)' }}
           itemStyle={{ color: 'hsl(210, 20%, 95%)' }}
+          formatter={(value: any, name: any, props: any) => {
+            if (showDayLabel && props.payload?.day) {
+              return [value, `${props.payload.day} - ${name}`];
+            }
+            return [value, name];
+          }}
         />
-        <Bar dataKey={dataKey} fill={color} radius={[4, 4, 0, 0]} />
+        <Bar 
+          dataKey={dataKey} 
+          fill={color} 
+          radius={[4, 4, 0, 0]} 
+          label={showDayLabel ? renderCustomLabel : undefined}
+        />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -318,7 +353,7 @@ export function DashboardCharts({ venuesWithSlots }: DashboardChartsProps) {
 
     switch (selectedChart) {
       case 'capacityPerSlot':
-        return renderBarChart(capacityPerSlotData, 'capacidade', COLORS.cyan);
+        return renderBarChart(capacityPerSlotData, 'capacidade', COLORS.cyan, true);
       case 'slotsByDay':
         return renderBarChart(slotsByDayData, 'slots', COLORS.pink);
       case 'slotsByTime':
