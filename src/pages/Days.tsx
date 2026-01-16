@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useHacktown } from '@/contexts/HacktownContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -18,13 +18,25 @@ import {
 } from '@/components/ui/alert-dialog';
 
 export default function Days() {
-  const { selectedDays, setSelectedDays, slotTemplates, daySlotActivities } = useHacktown();
-  const [isEditing, setIsEditing] = useState(selectedDays.length === 0);
+  const { selectedDays, setSelectedDays, slotTemplates, daySlotActivities, isLoading } = useHacktown();
+  const [isEditing, setIsEditing] = useState(false);
   const [tempSelectedDays, setTempSelectedDays] = useState<WeekDay[]>(selectedDays);
   const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; day: WeekDay | null }>({
     open: false,
     day: null,
   });
+
+  // Initialize editing mode only after data loads
+  useEffect(() => {
+    if (!isLoading && selectedDays.length === 0) {
+      setIsEditing(true);
+    }
+  }, [isLoading, selectedDays.length]);
+
+  // Update tempSelectedDays when selectedDays changes (e.g., after load)
+  useEffect(() => {
+    setTempSelectedDays(selectedDays);
+  }, [selectedDays]);
 
   console.log('📱 Days Component - selectedDays:', selectedDays);
   console.log('📱 Days Component - tempSelectedDays:', tempSelectedDays);
@@ -76,6 +88,26 @@ export default function Days() {
   };
 
   const displayDays = isEditing ? tempSelectedDays : selectedDays;
+
+  // Show loading state while data is being fetched
+  if (isLoading) {
+    return (
+      <div className="space-y-8">
+        <div className="space-y-2">
+          <h1 className="text-4xl font-bold gradient-text">Dias do Evento</h1>
+          <p className="text-muted-foreground text-lg">Carregando configurações...</p>
+        </div>
+        <Card className="glass border-hacktown-cyan/20">
+          <CardContent className="py-12 text-center">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-muted flex items-center justify-center animate-pulse">
+              <Calendar className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <p className="text-muted-foreground">Carregando dias do evento...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -141,7 +173,7 @@ export default function Days() {
             {WEEKDAYS_ORDER.map((day, index) => {
               const isSelected = displayDays.includes(day);
               const activityCount = getActivityCountForDay(day);
-              const slotCount = slotTemplates.length;
+              const slotCount = slotTemplates.filter(slot => slot.days?.includes(day)).length;
               
               return (
                 <div
