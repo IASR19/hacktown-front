@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useHacktown } from '@/contexts/HacktownContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -18,13 +18,25 @@ import {
 const SHOW_VENUE_PROGRAMMING = false; // Desabilitado até Atividades estar ativo
 
 export default function Dashboard() {
-  const { getVenuesWithSlots, venues, selectedDays } = useHacktown();
+  const { getVenuesWithSlots, venues, selectedDays, isLoading } = useHacktown();
   const venuesWithSlots = getVenuesWithSlots();
 
   // Filters
   const [filterDay, setFilterDay] = useState<string>('all');
   const [filterNucleo, setFilterNucleo] = useState<string>('all');
   const [filterStructure, setFilterStructure] = useState<string>('all');
+
+  // Auto-reload no primeiro acesso após login para carregar dados
+  useEffect(() => {
+    const firstAccess = localStorage.getItem('firstAccess');
+    if (firstAccess === 'true') {
+      localStorage.removeItem('firstAccess');
+      // Pequeno delay para garantir que a página carregou
+      setTimeout(() => {
+        window.location.reload();
+      }, 100);
+    }
+  }, []);
 
   // Get unique nucleos and structures for filter options
   const filterOptions = useMemo(() => {
@@ -63,6 +75,18 @@ export default function Dashboard() {
   }, [venuesWithSlots, filterDay, filterNucleo, filterStructure]);
 
   const hasActiveFilters = filterDay !== 'all' || filterNucleo !== 'all' || filterStructure !== 'all';
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-hacktown-cyan mx-auto"></div>
+          <p className="text-muted-foreground">Carregando dados...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">

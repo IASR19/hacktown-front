@@ -57,7 +57,10 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
   const [venues, setVenues] = useState<Venue[]>([]);
   const [slotTemplates, setSlotTemplates] = useState<SlotTemplate[]>([]);
   const [daySlotActivities, setDaySlotActivities] = useState<DaySlotActivity[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => {
+    // Inicializa baseado na presença do token
+    return !!localStorage.getItem('token');
+  });
 
   // Load data from API on mount
   useEffect(() => {
@@ -70,32 +73,32 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        console.log('🔄 Carregando dados da API...');
+        console.log('🔄 Carregando dados essenciais...');
         setIsLoading(true);
         
-        console.log('📡 Fazendo requisição para event-config...');
-        const configData = await eventConfigService.getConfig();
-        console.log('✅ Event config recebido:', configData);
-        
-        const [venuesData, templatesData, activitiesData] = await Promise.all([
+        // Carregar apenas dados essenciais primeiro (config e venues)
+        const [configData, venuesData] = await Promise.all([
+          eventConfigService.getConfig(),
           venuesService.getAll(),
-          slotTemplatesService.getAll(),
-          daySlotActivitiesService.getAll(),
         ]);
         
-        console.log('✅ Dados carregados:', {
-          venues: venuesData.length,
-          templates: templatesData.length,
-          activities: activitiesData.length,
-          selectedDays: configData.selectedDays
-        });
-        
         setVenues(venuesData);
-        setSlotTemplates(templatesData);
-        setDaySlotActivities(activitiesData);
         setSelectedDaysState(configData.selectedDays || []);
         
-        console.log('🎯 Estado atualizado com dias:', configData.selectedDays);
+        console.log('✅ Dados essenciais carregados');
+        
+        // Carregar dados secundários em background (não bloqueia UI)
+        Promise.all([
+          slotTemplatesService.getAll(),
+          daySlotActivitiesService.getAll(),
+        ]).then(([templatesData, activitiesData]) => {
+          setSlotTemplates(templatesData);
+          setDaySlotActivities(activitiesData);
+          console.log('✅ Dados secundários carregados');
+        }).catch(error => {
+          console.error('⚠️ Erro ao carregar dados secundários:', error);
+        });
+        
       } catch (error) {
         console.error('❌ Falha ao carregar dados:', error);
       } finally {

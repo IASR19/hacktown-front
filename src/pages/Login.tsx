@@ -113,6 +113,7 @@ export default function Login() {
       // Salvar token e dados do usuário
       localStorage.setItem('token', data.access_token);
       localStorage.setItem('user', JSON.stringify(data.user));
+      localStorage.setItem('firstAccess', 'true'); // Flag para reload automático
 
       // Redirecionar para o dashboard
       navigate('/dashboard');
