@@ -70,15 +70,16 @@ export function DashboardCharts({ venuesWithSlots }: DashboardChartsProps) {
 
   // 1. Capacidade por slot (soma da capacidade de venues por slot)
   const capacityPerSlotData = useMemo(() => {
-    const slotCapacities: { name: string; capacidade: number; day?: string }[] = [];
+    const slotCapacities: { name: string; capacidade: number; day?: string; venue?: string }[] = [];
     venuesWithSlots.forEach(venue => {
       venue.slots.forEach(slot => {
-        // Incluir o dia no label
+        // Incluir o dia e venue no label
         const dayLabel = WEEKDAY_SHORT_LABELS[slot.day];
         slotCapacities.push({
           name: `${slot.startTime}-${slot.endTime}`,
           capacidade: venue.capacity,
           day: dayLabel,
+          venue: venue.name,
         });
       });
     });
@@ -225,30 +226,47 @@ export function DashboardCharts({ venuesWithSlots }: DashboardChartsProps) {
       .map(([name, venues]) => ({ name: `${name}h`, venues: venues.size }));
   }, [venuesWithSlots]);
 
-  // Custom label para mostrar o dia acima das barras
+  // Custom label para mostrar o dia e venue acima das barras
   const renderCustomLabel = (props: any) => {
     const { x, y, width, index } = props;
     const item = capacityPerSlotData[index];
     
     if (!item?.day) return null;
     
+    // Truncar nome do venue se for muito longo
+    const venueName = item.venue ? (item.venue.length > 15 ? item.venue.substring(0, 15) + '...' : item.venue) : '';
+    
     return (
-      <text 
-        x={x + width / 2} 
-        y={y - 8} 
-        fill="hsl(330, 100%, 60%)" 
-        textAnchor="middle" 
-        fontSize={12}
-        fontWeight={700}
-      >
-        {item.day}
-      </text>
+      <g>
+        {/* Dia */}
+        <text 
+          x={x + width / 2} 
+          y={y - 22} 
+          fill="hsl(330, 100%, 60%)" 
+          textAnchor="middle" 
+          fontSize={11}
+          fontWeight={700}
+        >
+          {item.day}
+        </text>
+        {/* Venue */}
+        <text 
+          x={x + width / 2} 
+          y={y - 8} 
+          fill="hsl(187, 100%, 50%)" 
+          textAnchor="middle" 
+          fontSize={10}
+          fontWeight={600}
+        >
+          {venueName}
+        </text>
+      </g>
     );
   };
 
   const renderBarChart = (data: { name: string; [key: string]: string | number }[], dataKey: string, color: string, showDayLabel = false) => (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} margin={{ top: showDayLabel ? 30 : 20, right: 30, left: 0, bottom: 20 }}>
+      <BarChart data={data} margin={{ top: showDayLabel ? 45 : 20, right: 30, left: 0, bottom: 20 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 20%, 18%)" />
         <XAxis dataKey="name" tick={{ fill: 'hsl(220, 15%, 55%)', fontSize: 12 }} />
         <YAxis tick={{ fill: 'hsl(220, 15%, 55%)', fontSize: 12 }} />
@@ -262,6 +280,9 @@ export function DashboardCharts({ venuesWithSlots }: DashboardChartsProps) {
           labelStyle={{ color: 'hsl(210, 20%, 95%)' }}
           itemStyle={{ color: 'hsl(210, 20%, 95%)' }}
           formatter={(value: any, name: any, props: any) => {
+            if (showDayLabel && props.payload?.day && props.payload?.venue) {
+              return [value, `${props.payload.venue} - ${props.payload.day}`];
+            }
             if (showDayLabel && props.payload?.day) {
               return [value, `${props.payload.day} - ${name}`];
             }

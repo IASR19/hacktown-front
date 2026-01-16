@@ -20,6 +20,7 @@ import {
 interface HacktownContextType {
   // Loading state
   isLoading: boolean;
+  refetchAll: () => Promise<void>;
   
   // Event days
   selectedDays: WeekDay[];
@@ -61,6 +62,28 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
     // Inicializa baseado na presença do token
     return !!localStorage.getItem('token');
   });
+
+  // Function to refetch all data
+  const refetchAll = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    try {
+      console.log('🔄 Recarregando todos os dados...');
+      const [venuesData, templatesData, activitiesData] = await Promise.all([
+        venuesService.getAll(),
+        slotTemplatesService.getAll(),
+        daySlotActivitiesService.getAll(),
+      ]);
+      
+      setVenues(venuesData);
+      setSlotTemplates(templatesData);
+      setDaySlotActivities(activitiesData);
+      console.log('✅ Dados recarregados com sucesso');
+    } catch (error) {
+      console.error('❌ Erro ao recarregar dados:', error);
+    }
+  };
 
   // Load data from API on mount
   useEffect(() => {
@@ -142,6 +165,7 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
     try {
       const newVenue = await venuesService.create(venue);
       setVenues(prev => [...prev, newVenue]);
+      await refetchAll(); // Refetch para garantir sincronização
     } catch (error) {
       console.error('Failed to create venue:', error);
       throw error;
@@ -152,6 +176,7 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
     try {
       const updatedVenue = await venuesService.update(id, venue);
       setVenues(prev => prev.map(v => v.id === id ? updatedVenue : v));
+      await refetchAll(); // Refetch para garantir sincronização
     } catch (error) {
       console.error('Failed to update venue:', error);
       throw error;
@@ -161,17 +186,8 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
   const deleteVenue = async (id: string) => {
     try {
       await venuesService.delete(id);
-      setVenues(prev => prev.filter(v => v.id !== id));
-      
-      // Delete all slot templates for this venue
-      const templateIds = slotTemplates.filter(s => s.venueId === id).map(s => s.id);
-      for (const templateId of templateIds) {
-        await slotTemplatesService.delete(templateId);
-      }
-      setSlotTemplates(prev => prev.filter(s => s.venueId !== id));
-      
-      // Activities will be cascade deleted by backend
-      setDaySlotActivities(prev => prev.filter(dsa => !templateIds.includes(dsa.slotTemplateId)));
+      // Refetch tudo após delete para garantir cascata
+      await refetchAll();
     } catch (error) {
       console.error('Failed to delete venue:', error);
       throw error;
@@ -183,6 +199,7 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
     try {
       const newSlot = await slotTemplatesService.create(slot);
       setSlotTemplates(prev => [...prev, newSlot]);
+      await refetchAll(); // Refetch para garantir sincronização
     } catch (error) {
       console.error('Failed to create slot template:', error);
       throw error;
@@ -193,6 +210,7 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
     try {
       const updatedSlot = await slotTemplatesService.update(id, slot);
       setSlotTemplates(prev => prev.map(s => s.id === id ? updatedSlot : s));
+      await refetchAll(); // Refetch para garantir sincronização
     } catch (error) {
       console.error('Failed to update slot template:', error);
       throw error;
@@ -202,10 +220,8 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
   const deleteSlotTemplate = async (id: string) => {
     try {
       await slotTemplatesService.delete(id);
-      setSlotTemplates(prev => prev.filter(s => s.id !== id));
-      
-      // Activities will be cascade deleted by backend
-      setDaySlotActivities(prev => prev.filter(dsa => dsa.slotTemplateId !== id));
+      // Refetch tudo após delete para garantir cascata
+      await refetchAll();
     } catch (error) {
       console.error('Failed to delete slot template:', error);
       throw error;
@@ -243,6 +259,7 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
           newDaySlot
         ]);
       }
+      await refetchAll(); // Refetch para garantir sincronização
     } catch (error) {
       console.error('Failed to add activity to slot:', error);
       throw error;
@@ -266,6 +283,7 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
           return dsa;
         }));
       }
+      await refetchAll(); // Refetch para garantir sincronização
     } catch (error) {
       console.error('Failed to update activity in slot:', error);
       throw error;
@@ -284,6 +302,7 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
           dsa => !(dsa.slotTemplateId === slotTemplateId && dsa.day === day)
         ));
       }
+      await refetchAll(); // Refetch para garantir sincronização
     } catch (error) {
       console.error('Failed to remove activity from slot:', error);
       throw error;
@@ -341,6 +360,7 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
   return (
     <HacktownContext.Provider value={{
       isLoading,
+      refetchAll,
       selectedDays,
       setSelectedDays,
       venues,

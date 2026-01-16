@@ -46,9 +46,16 @@ export class ApiClient {
         );
       }
 
-      // Handle 204 No Content
-      if (response.status === 204) {
-        console.log(`✅ API Response: 204 No Content`);
+      // Handle 204 No Content or empty responses
+      if (response.status === 204 || response.headers.get('content-length') === '0') {
+        console.log(`✅ API Response: ${response.status} No Content`);
+        return undefined as T;
+      }
+
+      // Check if response has content
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.log(`✅ API Response: Non-JSON response`);
         return undefined as T;
       }
 

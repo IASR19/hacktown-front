@@ -74,7 +74,7 @@ export default function Venues() {
     setIsOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.code || !formData.name || !formData.location || !formData.capacity) {
@@ -93,23 +93,23 @@ export default function Venues() {
     };
 
     if (editingVenue) {
-      updateVenue(editingVenue.id, venueData);
+      await updateVenue(editingVenue.id, venueData);
       toast.success('Venue atualizado!');
     } else {
-      addVenue(venueData);
+      await addVenue(venueData);
       toast.success('Venue cadastrado!');
     }
 
     handleOpenChange(false);
   };
 
-  const handleDelete = (venue: Venue) => {
+  const handleDelete = async (venue: Venue) => {
     const venueSlots = slotTemplates.filter(s => s.venueId === venue.id);
     if (venueSlots.length > 0) {
       toast.error(`Este venue possui ${venueSlots.length} slot(s). Remova os slots primeiro.`);
       return;
     }
-    deleteVenue(venue.id);
+    await deleteVenue(venue.id);
     toast.success('Venue removido!');
   };
 

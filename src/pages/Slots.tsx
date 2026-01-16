@@ -48,6 +48,7 @@ export default function Slots() {
   const [isOpen, setIsOpen] = useState(false);
   const [editingSlot, setEditingSlot] = useState<SlotTemplate | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<SlotTemplate | null>(null);
+  const [selectedDaysForSlot, setSelectedDaysForSlot] = useState<WeekDay[]>([]);
   const [selectedVenueFilter, setSelectedVenueFilter] = useState<string>('all');
   const [formData, setFormData] = useState({
     venueId: '',
@@ -59,17 +60,33 @@ export default function Slots() {
 
   // Calculate summary statistics
   const summary = useMemo(() => {
-    const totalSlotInstances = slotTemplates.length * selectedDays.length;
+    // Calcular instâncias reais considerando os dias de cada slot
+    let totalSlotInstances = 0;
+    slotTemplates.forEach(template => {
+      const daysForTemplate = template.days && template.days.length > 0
+        ? template.days.filter(d => selectedDays.includes(d))
+        : selectedDays;
+      totalSlotInstances += daysForTemplate.length;
+    });
+    
     const scheduledActivities = daySlotActivities.length;
     const availableSlotInstances = totalSlotInstances - scheduledActivities;
     
     // Group by day
     const slotsByDay = selectedDays.map(day => {
+      // Contar quantos slots existem para este dia específico
+      const slotsForDay = slotTemplates.filter(template => {
+        const daysForTemplate = template.days && template.days.length > 0
+          ? template.days
+          : selectedDays;
+        return daysForTemplate.includes(day);
+      }).length;
+      
       const scheduled = daySlotActivities.filter(dsa => dsa.day === day).length;
       return {
         day,
-        total: slotTemplates.length,
-        available: slotTemplates.length - scheduled,
+        total: slotsForDay,
+        available: slotsForDay - scheduled,
         scheduled,
       };
     });
@@ -85,12 +102,18 @@ export default function Slots() {
 
   const resetForm = () => {
     setFormData({ venueId: '', startTime: '', endTime: '' });
+    setSelectedDaysForSlot(selectedDays); // Resetar para todos os dias
     setEditingSlot(null);
   };
 
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
-    if (!open) resetForm();
+    if (!open) {
+      resetForm();
+    } else if (!editingSlot) {
+      // Ao abrir para criar novo, inicializar com todos os dias
+      setSelectedDaysForSlot(selectedDays);
+    }
   };
 
   const handleEdit = (slot: SlotTemplate) => {
@@ -100,10 +123,20 @@ export default function Slots() {
       startTime: slot.startTime,
       endTime: slot.endTime,
     });
+    // Ao editar, carregar os dias que o slot já tem
+    setSelectedDaysForSlot(slot.days && slot.days.length > 0 ? slot.days : selectedDays);
     setIsOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const toggleDay = (day: WeekDay) => {
+    setSelectedDaysForSlot(prev => 
+      prev.includes(day) 
+        ? prev.filter(d => d !== day)
+        : [...prev, day]
+    );
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.venueId || !formData.startTime || !formData.endTime) {
@@ -111,36 +144,42 @@ export default function Slots() {
       return;
     }
 
-    const slotData = {
+    if (selectedDaysForSlot.length === 0) {
+      toast.error('Selecione pelo menos um dia');
+      return;
+    }
+
+    const slotData: any = {
       venueId: formData.venueId,
       startTime: formData.startTime,
       endTime: formData.endTime,
+      days: selectedDaysForSlot, // Sempre enviar os dias selecionados
     };
 
     if (editingSlot) {
-      updateSlotTemplate(editingSlot.id, slotData);
+      await updateSlotTemplate(editingSlot.id, slotData);
       toast.success('Slot atualizado!');
     } else {
-      addSlotTemplate(slotData);
-      toast.success(`Slot criado para ${selectedDays.length} dia(s)!`);
+      await addSlotTemplate(slotData);
+      toast.success(`Slot criado para ${selectedDaysForSlot.length} dia(s)!`);
     }
 
     handleOpenChange(false);
   };
 
-  const handleDeleteRequest = (slot: SlotTemplate) => {
+  const handleDeleteRequest = async (slot: SlotTemplate) => {
     const activitiesCount = daySlotActivities.filter(dsa => dsa.slotTemplateId === slot.id).length;
     if (activitiesCount > 0) {
       setDeleteConfirm(slot);
     } else {
-      deleteSlotTemplate(slot.id);
+      await deleteSlotTemplate(slot.id);
       toast.success('Slot removido!');
     }
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (deleteConfirm) {
-      deleteSlotTemplate(deleteConfirm.id);
+      await deleteSlotTemplate(deleteConfirm.id);
       toast.success('Slot e atividades removidos!');
       setDeleteConfirm(null);
     }
@@ -181,8 +220,34 @@ export default function Slots() {
               </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="p-3 rounded-lg bg-muted/50 border border-border text-sm text-muted-foreground">
-                Este slot será criado para: {selectedDays.map(d => WEEKDAY_SHORT_LABELS[d]).join(', ')}
+              <div className="space-y-3">
+                <Label className="text-muted-foreground">Dias * {editingSlot && '(editar)'}</Label>
+                <div className="p-4 rounded-lg bg-muted/30 border border-border space-y-2">
+                  <p className="text-sm text-muted-foreground mb-3">
+                    {editingSlot ? 'Edite os dias para este slot:' : 'Selecione os dias para este slot (já pré-selecionados):'}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedDays.map((day) => (
+                      <Button
+                        key={day}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => toggleDay(day)}
+                        className={`transition-all ${
+                          selectedDaysForSlot.includes(day)
+                            ? 'bg-hacktown-cyan text-hacktown-dark border-hacktown-cyan hover:bg-hacktown-cyan/80 font-semibold'
+                            : 'bg-muted/50 border-border hover:bg-muted text-muted-foreground'
+                        }`}
+                      >
+                        {WEEKDAY_SHORT_LABELS[day]}
+                      </Button>
+                    ))}
+                  </div>
+                  {selectedDaysForSlot.length === 0 && (
+                    <p className="text-xs text-red-400 mt-2">Selecione pelo menos um dia</p>
+                  )}
+                </div>
               </div>
               
               <div className="space-y-2">
@@ -409,7 +474,7 @@ export default function Slots() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm text-muted-foreground">
-                                {selectedDays.length} dia(s)
+                                {slot.days && slot.days.length > 0 ? slot.days.length : selectedDays.length} dia(s)
                               </p>
                             </div>
                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
