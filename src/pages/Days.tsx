@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react';
-import { useHacktown } from '@/contexts/HacktownContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Calendar, Check, Pencil, Save, X } from 'lucide-react';
-import { WeekDay, WEEKDAY_LABELS, WEEKDAYS_ORDER } from '@/types/hacktown';
+import { useState, useEffect } from "react";
+import { useHacktown } from "@/contexts/HacktownContext";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Calendar, Check, Pencil, Save, X } from "lucide-react";
+import { WeekDay, WEEKDAY_LABELS, WEEKDAYS_ORDER } from "@/types/hacktown";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,13 +17,89 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+} from "@/components/ui/alert-dialog";
+
+// Helper para calcular dias da semana entre duas datas
+const getWeekDaysBetweenDates = (
+  startDate: string,
+  endDate: string,
+): WeekDay[] => {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const weekDaysMap: Record<number, WeekDay> = {
+    0: "domingo",
+    1: "segunda",
+    2: "terca",
+    3: "quarta",
+    4: "quinta",
+    5: "sexta",
+    6: "sabado",
+  };
+  const uniqueDays = new Set<WeekDay>();
+
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const dayOfWeek = d.getDay();
+    uniqueDays.add(weekDaysMap[dayOfWeek]);
+  }
+
+  // Ordenar pelos dias da semana
+  return Array.from(uniqueDays).sort(
+    (a, b) => WEEKDAYS_ORDER.indexOf(a) - WEEKDAYS_ORDER.indexOf(b),
+  );
+};
+
+// Helper para obter a data específica de um dia da semana no período
+const getDateForWeekDay = (
+  weekDay: WeekDay,
+  startDate: string,
+  endDate: string,
+): string => {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const weekDaysMap: Record<number, WeekDay> = {
+    0: "domingo",
+    1: "segunda",
+    2: "terca",
+    3: "quarta",
+    4: "quinta",
+    5: "sexta",
+    6: "sabado",
+  };
+
+  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const dayOfWeek = d.getDay();
+    if (weekDaysMap[dayOfWeek] === weekDay) {
+      return d.toLocaleDateString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+      });
+    }
+  }
+
+  return "";
+};
 
 export default function Days() {
-  const { selectedDays, setSelectedDays, slotTemplates, daySlotActivities, isLoading } = useHacktown();
+  const {
+    selectedDays,
+    setSelectedDays,
+    eventStartDate,
+    eventEndDate,
+    setEventDates,
+    slotTemplates,
+    daySlotActivities,
+    isLoading,
+  } = useHacktown();
+
   const [isEditing, setIsEditing] = useState(false);
-  const [tempSelectedDays, setTempSelectedDays] = useState<WeekDay[]>(selectedDays);
-  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; day: WeekDay | null }>({
+  const [tempSelectedDays, setTempSelectedDays] =
+    useState<WeekDay[]>(selectedDays);
+  const [tempStartDate, setTempStartDate] = useState(eventStartDate || "");
+  const [tempEndDate, setTempEndDate] = useState(eventEndDate || "");
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    day: WeekDay | null;
+  }>({
     open: false,
     day: null,
   });
@@ -36,13 +114,26 @@ export default function Days() {
   // Update tempSelectedDays when selectedDays changes (e.g., after load)
   useEffect(() => {
     setTempSelectedDays(selectedDays);
-  }, [selectedDays]);
+    setTempStartDate(eventStartDate || "");
+    setTempEndDate(eventEndDate || "");
+  }, [selectedDays, eventStartDate, eventEndDate]);
 
-  console.log('📱 Days Component - selectedDays:', selectedDays);
-  console.log('📱 Days Component - tempSelectedDays:', tempSelectedDays);
+  // Calcular dias automaticamente quando mudar as datas
+  useEffect(() => {
+    if (isEditing && tempStartDate && tempEndDate) {
+      const calculatedDays = getWeekDaysBetweenDates(
+        tempStartDate,
+        tempEndDate,
+      );
+      setTempSelectedDays(calculatedDays);
+    }
+  }, [tempStartDate, tempEndDate, isEditing]);
+
+  console.log("📱 Days Component - selectedDays:", selectedDays);
+  console.log("📱 Days Component - tempSelectedDays:", tempSelectedDays);
 
   const getActivityCountForDay = (day: WeekDay) => {
-    return daySlotActivities.filter(dsa => dsa.day === day).length;
+    return daySlotActivities.filter((dsa) => dsa.day === day).length;
   };
 
   const toggleDay = (day: WeekDay) => {
@@ -58,7 +149,7 @@ export default function Days() {
     }
 
     if (isCurrentlySelected) {
-      setTempSelectedDays(tempSelectedDays.filter(d => d !== day));
+      setTempSelectedDays(tempSelectedDays.filter((d) => d !== day));
     } else {
       setTempSelectedDays([...tempSelectedDays, day]);
     }
@@ -66,24 +157,34 @@ export default function Days() {
 
   const confirmRemoveDay = () => {
     if (confirmDialog.day) {
-      setTempSelectedDays(tempSelectedDays.filter(d => d !== confirmDialog.day));
+      setTempSelectedDays(
+        tempSelectedDays.filter((d) => d !== confirmDialog.day),
+      );
     }
     setConfirmDialog({ open: false, day: null });
   };
 
-  const handleSave = () => {
-    console.log('💾 Salvando dias:', tempSelectedDays);
+  const handleSave = async () => {
+    console.log("💾 Salvando dias:", tempSelectedDays);
+    console.log("💾 Salvando datas:", tempStartDate, tempEndDate);
     setSelectedDays(tempSelectedDays);
+    if (tempStartDate && tempEndDate) {
+      await setEventDates(tempStartDate, tempEndDate);
+    }
     setIsEditing(false);
   };
 
   const handleCancel = () => {
     setTempSelectedDays(selectedDays);
+    setTempStartDate(eventStartDate || "");
+    setTempEndDate(eventEndDate || "");
     setIsEditing(false);
   };
 
   const handleEdit = () => {
     setTempSelectedDays(selectedDays);
+    setTempStartDate(eventStartDate || "");
+    setTempEndDate(eventEndDate || "");
     setIsEditing(true);
   };
 
@@ -95,14 +196,18 @@ export default function Days() {
       <div className="space-y-8">
         <div className="space-y-2">
           <h1 className="text-4xl font-bold gradient-text">Dias do Evento</h1>
-          <p className="text-muted-foreground text-lg">Carregando configurações...</p>
+          <p className="text-muted-foreground text-lg">
+            Carregando configurações...
+          </p>
         </div>
         <Card className="glass border-hacktown-cyan/20">
           <CardContent className="py-12 text-center">
             <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-muted flex items-center justify-center animate-pulse">
               <Calendar className="h-8 w-8 text-muted-foreground" />
             </div>
-            <p className="text-muted-foreground">Carregando dias do evento...</p>
+            <p className="text-muted-foreground">
+              Carregando dias do evento...
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -115,10 +220,9 @@ export default function Days() {
         <div className="space-y-2">
           <h1 className="text-4xl font-bold gradient-text">Dias do Evento</h1>
           <p className="text-muted-foreground text-lg">
-            {isEditing 
-              ? 'Selecione os dias da semana em que o evento acontecerá'
-              : 'Dias configurados para o evento'
-            }
+            {isEditing
+              ? "Selecione os dias da semana em que o evento acontecerá"
+              : "Dias configurados para o evento"}
           </p>
         </div>
 
@@ -156,6 +260,53 @@ export default function Days() {
         </div>
       </div>
 
+      {/* Campos de Data do Evento */}
+      {isEditing && (
+        <Card className="glass border-hacktown-pink/20">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2 text-muted-foreground">
+              <Calendar className="h-5 w-5 text-hacktown-pink" />
+              Período do Evento
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label htmlFor="startDate" className="text-muted-foreground">
+                  Data de Início *
+                </Label>
+                <Input
+                  id="startDate"
+                  type="date"
+                  value={tempStartDate}
+                  onChange={(e) => setTempStartDate(e.target.value)}
+                  className="bg-muted/50 border-border focus:border-hacktown-pink"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="endDate" className="text-muted-foreground">
+                  Data de Término *
+                </Label>
+                <Input
+                  id="endDate"
+                  type="date"
+                  value={tempEndDate}
+                  min={tempStartDate}
+                  onChange={(e) => setTempEndDate(e.target.value)}
+                  className="bg-muted/50 border-border focus:border-hacktown-pink"
+                />
+              </div>
+            </div>
+            {tempStartDate && tempEndDate && (
+              <p className="text-sm text-muted-foreground mt-4">
+                Os dias da semana serão calculados automaticamente baseado no
+                período selecionado.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="glass border-hacktown-cyan/20">
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2 text-muted-foreground">
@@ -173,47 +324,65 @@ export default function Days() {
             {WEEKDAYS_ORDER.map((day, index) => {
               const isSelected = displayDays.includes(day);
               const activityCount = getActivityCountForDay(day);
-              const slotCount = slotTemplates.filter(slot => slot.days?.includes(day)).length;
-              
+              const slotCount = slotTemplates.filter((slot) =>
+                slot.days?.includes(day),
+              ).length;
+              const dateLabel =
+                eventStartDate && eventEndDate
+                  ? getDateForWeekDay(day, eventStartDate, eventEndDate)
+                  : "";
+
               return (
                 <div
                   key={day}
                   className={`
                     relative p-5 rounded-xl transition-all duration-300
                     border-2 group
-                    ${isEditing ? 'cursor-pointer' : 'cursor-default'}
-                    ${isSelected 
-                      ? 'bg-gradient-to-br from-hacktown-cyan/20 to-hacktown-pink/10 border-hacktown-cyan/50 neon-glow' 
-                      : 'bg-muted/30 border-border/50'
+                    ${isEditing ? "cursor-pointer" : "cursor-default"}
+                    ${
+                      isSelected
+                        ? "bg-gradient-to-br from-hacktown-cyan/20 to-hacktown-pink/10 border-hacktown-cyan/50 neon-glow"
+                        : "bg-muted/30 border-border/50"
                     }
-                    ${isEditing && !isSelected ? 'hover:border-hacktown-cyan/30 hover:bg-muted/50' : ''}
-                    ${!isEditing ? 'opacity-90' : ''}
+                    ${isEditing && !isSelected ? "hover:border-hacktown-cyan/30 hover:bg-muted/50" : ""}
+                    ${!isEditing ? "opacity-90" : ""}
                   `}
                   style={{ animationDelay: `${index * 50}ms` }}
                   onClick={() => toggleDay(day)}
                 >
                   <div className="flex items-start justify-between mb-3">
-                    <div className={`
+                    <div
+                      className={`
                       w-6 h-6 rounded-md flex items-center justify-center transition-all
-                      ${isSelected 
-                        ? 'bg-hacktown-cyan text-hacktown-dark' 
-                        : 'bg-muted border border-border'
+                      ${
+                        isSelected
+                          ? "bg-hacktown-cyan text-hacktown-dark"
+                          : "bg-muted border border-border"
                       }
-                    `}>
+                    `}
+                    >
                       {isSelected && <Check className="h-4 w-4" />}
                     </div>
                   </div>
-                  
-                  <h3 className={`
+
+                  <h3
+                    className={`
                     text-lg font-semibold transition-colors
-                    ${isSelected ? 'text-foreground' : 'text-muted-foreground'}
-                  `}>
+                    ${isSelected ? "text-foreground" : "text-muted-foreground"}
+                  `}
+                  >
                     {WEEKDAY_LABELS[day]}
+                    {dateLabel && isSelected && (
+                      <span className="ml-2 text-sm text-hacktown-cyan">
+                        ({dateLabel})
+                      </span>
+                    )}
                   </h3>
-                  
+
                   {isSelected && (
                     <p className="text-xs text-muted-foreground mt-2">
-                      {slotCount} slot{slotCount !== 1 ? 's' : ''} disponíve{slotCount !== 1 ? 'is' : 'l'}
+                      {slotCount} slot{slotCount !== 1 ? "s" : ""} disponíve
+                      {slotCount !== 1 ? "is" : "l"}
                     </p>
                   )}
                 </div>
@@ -228,9 +397,9 @@ export default function Days() {
           <CardContent className="py-6">
             <div className="flex flex-wrap gap-2 items-center">
               <span className="text-muted-foreground mr-2">Dias ativos:</span>
-              {displayDays.map(day => (
-                <Badge 
-                  key={day} 
+              {displayDays.map((day) => (
+                <Badge
+                  key={day}
                   className="bg-hacktown-cyan/20 text-hacktown-cyan border-hacktown-cyan/30 font-medium"
                 >
                   {WEEKDAY_LABELS[day]}
@@ -247,7 +416,9 @@ export default function Days() {
             <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-muted flex items-center justify-center">
               <Calendar className="h-8 w-8 text-muted-foreground" />
             </div>
-            <p className="text-muted-foreground text-lg">Nenhum dia selecionado</p>
+            <p className="text-muted-foreground text-lg">
+              Nenhum dia selecionado
+            </p>
             <p className="text-sm text-muted-foreground/70 mt-1">
               Selecione os dias acima para começar a configurar o evento
             </p>
@@ -255,19 +426,32 @@ export default function Days() {
         </Card>
       )}
 
-      <AlertDialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog({ open, day: null })}>
+      <AlertDialog
+        open={confirmDialog.open}
+        onOpenChange={(open) => setConfirmDialog({ open, day: null })}
+      >
         <AlertDialogContent className="glass border-hacktown-pink/30">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-hacktown-pink">Confirmar remoção</AlertDialogTitle>
+            <AlertDialogTitle className="text-hacktown-pink">
+              Confirmar remoção
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              O dia <strong>{confirmDialog.day ? WEEKDAY_LABELS[confirmDialog.day] : ''}</strong> possui{' '}
-              <strong>{confirmDialog.day ? getActivityCountForDay(confirmDialog.day) : 0}</strong> atividade(s) 
-              agendada(s). Deseja realmente remover este dia?
+              O dia{" "}
+              <strong>
+                {confirmDialog.day ? WEEKDAY_LABELS[confirmDialog.day] : ""}
+              </strong>{" "}
+              possui{" "}
+              <strong>
+                {confirmDialog.day
+                  ? getActivityCountForDay(confirmDialog.day)
+                  : 0}
+              </strong>{" "}
+              atividade(s) agendada(s). Deseja realmente remover este dia?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={confirmRemoveDay}
               className="bg-hacktown-pink hover:bg-hacktown-pink/90"
             >

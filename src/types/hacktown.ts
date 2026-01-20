@@ -1,40 +1,62 @@
-export type VenueStructureType = 'auditorio' | 'casa' | 'espaco' | 'restaurante_bar' | 'sala';
+export type VenueStructureType =
+  | "auditorio"
+  | "casa"
+  | "espaco"
+  | "restaurante_bar"
+  | "sala";
 
 export const VENUE_STRUCTURE_LABELS: Record<VenueStructureType, string> = {
-  auditorio: 'Auditório',
-  casa: 'Casa',
-  espaco: 'Espaço',
-  restaurante_bar: 'Restaurante/Bar',
-  sala: 'Sala',
+  auditorio: "Auditório",
+  casa: "Casa",
+  espaco: "Espaço",
+  restaurante_bar: "Restaurante/Bar",
+  sala: "Sala",
 };
 
-export type WeekDay = 'segunda' | 'terca' | 'quarta' | 'quinta' | 'sexta' | 'sabado' | 'domingo';
+export type WeekDay =
+  | "segunda"
+  | "terca"
+  | "quarta"
+  | "quinta"
+  | "sexta"
+  | "sabado"
+  | "domingo";
 
 export const WEEKDAY_LABELS: Record<WeekDay, string> = {
-  segunda: 'Segunda-feira',
-  terca: 'Terça-feira',
-  quarta: 'Quarta-feira',
-  quinta: 'Quinta-feira',
-  sexta: 'Sexta-feira',
-  sabado: 'Sábado',
-  domingo: 'Domingo',
+  segunda: "Segunda-feira",
+  terca: "Terça-feira",
+  quarta: "Quarta-feira",
+  quinta: "Quinta-feira",
+  sexta: "Sexta-feira",
+  sabado: "Sábado",
+  domingo: "Domingo",
 };
 
 export const WEEKDAY_SHORT_LABELS: Record<WeekDay, string> = {
-  segunda: 'Seg',
-  terca: 'Ter',
-  quarta: 'Qua',
-  quinta: 'Qui',
-  sexta: 'Sex',
-  sabado: 'Sáb',
-  domingo: 'Dom',
+  segunda: "Seg",
+  terca: "Ter",
+  quarta: "Qua",
+  quinta: "Qui",
+  sexta: "Sex",
+  sabado: "Sáb",
+  domingo: "Dom",
 };
 
-export const WEEKDAYS_ORDER: WeekDay[] = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
+export const WEEKDAYS_ORDER: WeekDay[] = [
+  "segunda",
+  "terca",
+  "quarta",
+  "quinta",
+  "sexta",
+  "sabado",
+  "domingo",
+];
 
 export interface EventConfig {
   id: string;
   selectedDays: WeekDay[];
+  startDate?: string; // Formato: YYYY-MM-DD
+  endDate?: string; // Formato: YYYY-MM-DD
   updatedAt: Date;
 }
 
