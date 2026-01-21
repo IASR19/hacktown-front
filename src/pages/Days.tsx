@@ -372,8 +372,10 @@ export default function Days() {
                   `}
                   >
                     {WEEKDAY_LABELS[day]}
-                    {dateLabel && isSelected && (
-                      <span className="ml-2 text-sm text-hacktown-cyan">
+                    {dateLabel && (
+                      <span
+                        className={`ml-2 text-sm ${isSelected ? "text-hacktown-cyan" : "text-muted-foreground"}`}
+                      >
                         ({dateLabel})
                       </span>
                     )}
