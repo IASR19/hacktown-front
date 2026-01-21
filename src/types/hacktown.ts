@@ -1,16 +1,28 @@
 export type VenueStructureType =
+  | "restaurante"
+  | "sala"
   | "auditorio"
-  | "casa"
   | "espaco"
-  | "restaurante_bar"
-  | "sala";
+  | "casa"
+  | "apoio"
+  | "palco"
+  | "feira"
+  | "lounge"
+  | "estande"
+  | "coworking";
 
 export const VENUE_STRUCTURE_LABELS: Record<VenueStructureType, string> = {
-  auditorio: "Auditório",
-  casa: "Casa",
-  espaco: "Espaço",
-  restaurante_bar: "Restaurante/Bar",
+  restaurante: "Restaurante",
   sala: "Sala",
+  auditorio: "Auditório",
+  espaco: "Espaço",
+  casa: "Casa",
+  apoio: "Apoio",
+  palco: "Palco",
+  feira: "Feira",
+  lounge: "Lounge",
+  estande: "Estande",
+  coworking: "Coworking",
 };
 
 export type WeekDay =

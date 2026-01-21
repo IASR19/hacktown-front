@@ -71,13 +71,18 @@ export default function Venues() {
   // Filter and sort venues alphabetically
   const filteredVenues = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
-    return venues
+    const filtered = venues
       .filter(
         (venue) =>
           venue.name.toLowerCase().includes(query) ||
           venue.code.toLowerCase().includes(query),
       )
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+
+    console.log(
+      `📊 Total venues: ${venues.length}, Filtrados: ${filtered.length}, Query: "${query}"`,
+    );
+    return filtered;
   }, [venues, searchQuery]);
 
   const resetForm = () => {
@@ -138,7 +143,7 @@ export default function Venues() {
     }
 
     const venueData = {
-      ...(editingVenue && formData.code ? { code: formData.code } : {}),
+      code: formData.code,
       name: formData.name,
       location: formData.location,
       capacity: parseInt(formData.capacity),
@@ -370,16 +375,14 @@ export default function Venues() {
                       <Input
                         id="code"
                         value={formData.code}
-                        disabled={!editingVenue}
+                        disabled={true}
                         onChange={(e) =>
                           setFormData({ ...formData, code: e.target.value })
                         }
                         placeholder=""
                         className="bg-muted/50 border-border focus:border-hacktown-cyan font-mono disabled:opacity-60 disabled:cursor-not-allowed pr-10"
                       />
-                      {!editingVenue && (
-                        <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
-                      )}
+                      <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/50" />
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -623,8 +626,8 @@ export default function Venues() {
                   • <strong>capacidade</strong> - Número de pessoas
                 </li>
                 <li>
-                  • <strong>tipo</strong> - auditório, casa, espaço,
-                  restaurante/bar, ou sala
+                  <strong>tipo</strong>: restaurante, sala, auditório, espaço,
+                  casa, apoio, palco, feira, lounge, estande, ou coworking
                 </li>
               </ul>
               <h4 className="font-semibold mt-3 mb-2 text-sm">

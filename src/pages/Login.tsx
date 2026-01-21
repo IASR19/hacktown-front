@@ -1,69 +1,76 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle, CheckCircle2, Eye, EyeOff } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle, CheckCircle2, Eye, EyeOff } from "lucide-react";
 
 export default function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [emailError, setEmailError] = useState('');
-  const [passwordError, setPasswordError] = useState('');
-  const [loginError, setLoginError] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [loginError, setLoginError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
   // Redirecionar se já estiver autenticado
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem("token");
     if (token) {
-      navigate('/dashboard', { replace: true });
+      navigate("/dashboard", { replace: true });
     }
   }, [navigate]);
 
   // Validação em tempo real do email
   useEffect(() => {
     if (email.length === 0) {
-      setEmailError('');
+      setEmailError("");
       return;
     }
 
-    if (!email.includes('@')) {
-      setEmailError('Email deve conter @');
+    if (!email.includes("@")) {
+      setEmailError("Email deve conter @");
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      setEmailError('Email inválido');
+      setEmailError("Email inválido");
       return;
     }
 
-    setEmailError('');
+    setEmailError("");
   }, [email]);
 
   // Validação em tempo real da senha
   useEffect(() => {
     if (password.length === 0) {
-      setPasswordError('');
+      setPasswordError("");
       return;
     }
 
     if (password.length < 6) {
-      setPasswordError('Senha deve ter no mínimo 6 caracteres');
+      setPasswordError("Senha deve ter no mínimo 6 caracteres");
       return;
     }
 
-    setPasswordError('');
+    setPasswordError("");
   }, [password]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoginError('');
+    setLoginError("");
 
     // Validações finais antes de enviar
     if (emailError || passwordError) {
@@ -71,39 +78,39 @@ export default function Login() {
     }
 
     if (!email || !password) {
-      setLoginError('Preencha todos os campos');
+      setLoginError("Preencha todos os campos");
       return;
     }
 
     setIsLoading(true);
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:3001";
       const response = await fetch(`${apiUrl}/auth/login`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({ email, password }),
       });
 
       if (!response.ok) {
         if (response.status === 401) {
-          setLoginError('Email ou senha inválidos');
+          setLoginError("Email ou senha inválidos");
           return;
         }
-        
+
         if (response.status >= 500) {
-          setLoginError('Erro no servidor. Tente novamente mais tarde.');
+          setLoginError("Erro no servidor. Tente novamente mais tarde.");
           return;
         }
 
         // Tentar extrair mensagem de erro do backend
         try {
           const errorData = await response.json();
-          setLoginError(errorData.message || 'Erro ao fazer login');
+          setLoginError(errorData.message || "Erro ao fazer login");
         } catch {
-          setLoginError('Erro ao fazer login. Verifique suas credenciais.');
+          setLoginError("Erro ao fazer login. Verifique suas credenciais.");
         }
         return;
       }
@@ -111,20 +118,22 @@ export default function Login() {
       const data = await response.json();
 
       // Salvar token e dados do usuário
-      localStorage.setItem('token', data.access_token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-      localStorage.setItem('firstAccess', 'true'); // Flag para reload automático
+      localStorage.setItem("token", data.access_token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+      localStorage.setItem("firstAccess", "true"); // Flag para reload automático
 
       // Redirecionar para o dashboard
-      navigate('/dashboard');
+      navigate("/dashboard");
     } catch (error) {
       // Erro de rede ou conexão
-      if (error instanceof TypeError && error.message.includes('fetch')) {
-        setLoginError('Não foi possível conectar ao servidor. Verifique sua conexão.');
+      if (error instanceof TypeError && error.message.includes("fetch")) {
+        setLoginError(
+          "Não foi possível conectar ao servidor. Verifique sua conexão.",
+        );
       } else {
-        setLoginError('Erro inesperado. Tente novamente.');
+        setLoginError("Erro inesperado. Tente novamente.");
       }
-      console.error('Login error:', error);
+      console.error("Login error:", error);
     } finally {
       setIsLoading(false);
     }
@@ -138,7 +147,9 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-blue-50 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center gradient-text">HackTown</CardTitle>
+          <CardTitle className="text-2xl font-bold text-center gradient-text">
+            HackTown
+          </CardTitle>
           <CardDescription className="text-center">
             Entre com suas credenciais para acessar o sistema
           </CardDescription>
@@ -161,7 +172,13 @@ export default function Login() {
                   placeholder="seu@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className={emailError ? 'border-red-500' : isEmailValid ? 'border-green-500' : ''}
+                  className={
+                    emailError
+                      ? "border-red-500"
+                      : isEmailValid
+                        ? "border-green-500"
+                        : ""
+                  }
                   disabled={isLoading}
                 />
                 {isEmailValid && (
@@ -185,7 +202,7 @@ export default function Login() {
                   placeholder="••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className={`${passwordError ? 'border-red-500' : isPasswordValid ? 'border-green-500' : ''} pr-20`}
+                  className={`${passwordError ? "border-red-500" : isPasswordValid ? "border-green-500" : ""} pr-20`}
                   disabled={isLoading}
                 />
                 <button
@@ -213,12 +230,8 @@ export default function Login() {
             </div>
           </CardContent>
           <CardFooter>
-            <Button 
-              type="submit" 
-              className="w-full" 
-              disabled={!canSubmit}
-            >
-              {isLoading ? 'Entrando...' : 'Entrar'}
+            <Button type="submit" className="w-full" disabled={!canSubmit}>
+              {isLoading ? "Entrando..." : "Entrar"}
             </Button>
           </CardFooter>
         </form>
