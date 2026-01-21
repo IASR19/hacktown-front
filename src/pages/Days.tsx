@@ -182,15 +182,15 @@ export default function Days() {
   const handleSave = async () => {
     console.log("💾 Salvando dias:", tempSelectedDays);
     console.log("💾 Salvando datas:", tempStartDate, tempEndDate);
-    
+
     // Salvar dias primeiro
     await setSelectedDays(tempSelectedDays);
-    
+
     // Depois salvar datas (se existirem)
     if (tempStartDate && tempEndDate) {
       await setEventDates(tempStartDate, tempEndDate);
     }
-    
+
     setIsEditing(false);
   };
 
@@ -213,7 +213,7 @@ export default function Days() {
     if (!eventStartDate || !eventEndDate || days.length === 0) {
       return days;
     }
-    
+
     // Criar um mapa de dia da semana para a primeira ocorrência no período
     const weekDaysMap: Record<number, WeekDay> = {
       0: "domingo",
@@ -224,12 +224,12 @@ export default function Days() {
       5: "sexta",
       6: "sabado",
     };
-    
+
     const start = new Date(eventStartDate + "T00:00:00");
     const end = new Date(eventEndDate + "T00:00:00");
     const orderedDays: WeekDay[] = [];
     const daysSet = new Set(days);
-    
+
     const current = new Date(start);
     while (current <= end && orderedDays.length < days.length) {
       const dayOfWeek = current.getDay();
@@ -239,11 +239,13 @@ export default function Days() {
       }
       current.setDate(current.getDate() + 1);
     }
-    
+
     return orderedDays;
   };
 
-  const displayDays = getOrderedDays(isEditing ? tempSelectedDays : selectedDays);
+  const displayDays = getOrderedDays(
+    isEditing ? tempSelectedDays : selectedDays,
+  );
 
   // Show loading state while data is being fetched
   if (isLoading) {
