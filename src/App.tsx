@@ -11,6 +11,7 @@ import Days from "@/pages/Days";
 import Venues from "@/pages/Venues";
 import Slots from "@/pages/Slots";
 import CapacityManagement from "@/pages/CapacityManagement";
+import CapacityAnalysis from "@/pages/CapacityAnalysis";
 import Login from "@/pages/Login";
 import NotFound from "./pages/NotFound";
 
@@ -88,6 +89,16 @@ const App = () => (
                   <PrivateRoute>
                     <AppLayout>
                       <CapacityManagement />
+                    </AppLayout>
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/capacity-analysis"
+                element={
+                  <PrivateRoute>
+                    <AppLayout>
+                      <CapacityAnalysis />
                     </AppLayout>
                   </PrivateRoute>
                 }

@@ -1,6 +1,17 @@
-import { LayoutDashboard, MapPin, Clock, Mic2, Calendar, BarChart3, Lock, LogOut, User } from 'lucide-react';
-import { NavLink } from '@/components/NavLink';
-import { useNavigate } from 'react-router-dom';
+import {
+  LayoutDashboard,
+  MapPin,
+  Clock,
+  Mic2,
+  Calendar,
+  BarChart3,
+  TrendingUp,
+  Lock,
+  LogOut,
+  User,
+} from "lucide-react";
+import { NavLink } from "@/components/NavLink";
+import { useNavigate } from "react-router-dom";
 import {
   Sidebar,
   SidebarContent,
@@ -11,27 +22,59 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarFooter,
-} from '@/components/ui/sidebar';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+} from "@/components/ui/sidebar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 const menuItems = [
-  { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard, color: 'text-hacktown-cyan' },
-  { title: 'Dias', url: '/days', icon: Calendar, color: 'text-hacktown-purple' },
-  { title: 'Venues', url: '/venues', icon: MapPin, color: 'text-hacktown-pink' },
-  { title: 'Slots', url: '/slots', icon: Clock, color: 'text-hacktown-cyan' },
-  { title: 'Gestão de Capacidade', url: '/capacity', icon: BarChart3, color: 'text-hacktown-green' },
-  { title: 'Atividades', url: '/talks', icon: Mic2, color: 'text-hacktown-pink', disabled: true },
+  {
+    title: "Dashboard",
+    url: "/dashboard",
+    icon: LayoutDashboard,
+    color: "text-hacktown-cyan",
+  },
+  {
+    title: "Dias",
+    url: "/days",
+    icon: Calendar,
+    color: "text-hacktown-purple",
+  },
+  {
+    title: "Venues",
+    url: "/venues",
+    icon: MapPin,
+    color: "text-hacktown-pink",
+  },
+  { title: "Slots", url: "/slots", icon: Clock, color: "text-hacktown-cyan" },
+  {
+    title: "Gestão de Capacidade",
+    url: "/capacity",
+    icon: BarChart3,
+    color: "text-hacktown-green",
+  },
+  {
+    title: "Análise de Capacidade",
+    url: "/capacity-analysis",
+    icon: TrendingUp,
+    color: "text-hacktown-purple",
+  },
+  {
+    title: "Atividades",
+    url: "/talks",
+    icon: Mic2,
+    color: "text-hacktown-pink",
+    disabled: true,
+  },
 ];
 
 export function AppSidebar() {
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    navigate('/login');
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    navigate("/login");
   };
 
   return (
@@ -44,8 +87,15 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1 px-2">
               {menuItems.map((item, index) => (
-                <SidebarMenuItem key={item.title} style={{ animationDelay: `${index * 50}ms` }} className="animate-slide-in">
-                  <SidebarMenuButton asChild={!item.disabled} disabled={item.disabled}>
+                <SidebarMenuItem
+                  key={item.title}
+                  style={{ animationDelay: `${index * 50}ms` }}
+                  className="animate-slide-in"
+                >
+                  <SidebarMenuButton
+                    asChild={!item.disabled}
+                    disabled={item.disabled}
+                  >
                     {item.disabled ? (
                       <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-sidebar-foreground/40 cursor-not-allowed">
                         <item.icon className="h-5 w-5 text-muted-foreground/40" />
@@ -53,13 +103,15 @@ export function AppSidebar() {
                         <Lock className="h-4 w-4 ml-auto text-amber-500/70" />
                       </div>
                     ) : (
-                      <NavLink 
-                        to={item.url} 
-                        end={item.url === '/dashboard'} 
+                      <NavLink
+                        to={item.url}
+                        end={item.url === "/dashboard"}
                         className="flex items-center gap-3 px-4 py-3 rounded-xl text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-all duration-200 group"
                         activeClassName="bg-gradient-to-r from-hacktown-cyan/20 to-hacktown-pink/10 text-sidebar-foreground border border-hacktown-cyan/30 neon-glow"
                       >
-                        <item.icon className={`h-5 w-5 ${item.color} group-hover:scale-110 transition-transform`} />
+                        <item.icon
+                          className={`h-5 w-5 ${item.color} group-hover:scale-110 transition-transform`}
+                        />
                         <span className="font-medium">{item.title}</span>
                       </NavLink>
                     )}
@@ -77,14 +129,18 @@ export function AppSidebar() {
               <User className="h-4 w-4 text-white" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-sidebar-foreground truncate">{user.name || 'Usuário'}</p>
-              <p className="text-xs text-muted-foreground truncate">{user.email || ''}</p>
+              <p className="text-sm font-medium text-sidebar-foreground truncate">
+                {user.name || "Usuário"}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                {user.email || ""}
+              </p>
             </div>
           </div>
-          <Button 
-            onClick={handleLogout} 
-            variant="outline" 
-            size="sm" 
+          <Button
+            onClick={handleLogout}
+            variant="outline"
+            size="sm"
             className="w-full justify-start gap-2 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
           >
             <LogOut className="h-4 w-4" />
