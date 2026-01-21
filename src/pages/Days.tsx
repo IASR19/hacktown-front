@@ -24,6 +24,11 @@ const getWeekDaysBetweenDates = (
   startDate: string,
   endDate: string,
 ): WeekDay[] => {
+  // Se não há datas definidas, retornar ordem tradicional da semana
+  if (!startDate || !endDate) {
+    return WEEKDAYS_ORDER;
+  }
+
   // Usar UTC para evitar problemas de timezone
   const start = new Date(startDate + "T00:00:00");
   const end = new Date(endDate + "T00:00:00");
@@ -36,19 +41,24 @@ const getWeekDaysBetweenDates = (
     5: "sexta",
     6: "sabado",
   };
-  const uniqueDays = new Set<WeekDay>();
+  const daysInOrder: WeekDay[] = [];
+  const seen = new Set<WeekDay>();
 
   const current = new Date(start);
   while (current <= end) {
     const dayOfWeek = current.getDay();
-    uniqueDays.add(weekDaysMap[dayOfWeek]);
+    const weekDay = weekDaysMap[dayOfWeek];
+    // Adicionar na ordem cronológica, sem repetir
+    if (!seen.has(weekDay)) {
+      daysInOrder.push(weekDay);
+      seen.add(weekDay);
+    }
     current.setDate(current.getDate() + 1);
   }
 
-  // Ordenar pelos dias da semana
-  return Array.from(uniqueDays).sort(
-    (a, b) => WEEKDAYS_ORDER.indexOf(a) - WEEKDAYS_ORDER.indexOf(b),
-  );
+  // Retornar na ordem cronológica do período
+  return daysInOrder;
+};
 };
 
 // Helper para obter a data específica de um dia da semana no período
