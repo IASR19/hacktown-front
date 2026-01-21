@@ -59,7 +59,6 @@ const getWeekDaysBetweenDates = (
   // Retornar na ordem cronológica do período
   return daysInOrder;
 };
-};
 
 // Helper para obter a data específica de um dia da semana no período
 const getDateForWeekDay = (
