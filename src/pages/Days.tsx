@@ -208,7 +208,42 @@ export default function Days() {
     setIsEditing(true);
   };
 
-  const displayDays = isEditing ? tempSelectedDays : selectedDays;
+  // Ordenar dias cronologicamente se houver datas definidas
+  const getOrderedDays = (days: WeekDay[]): WeekDay[] => {
+    if (!eventStartDate || !eventEndDate || days.length === 0) {
+      return days;
+    }
+    
+    // Criar um mapa de dia da semana para a primeira ocorrência no período
+    const weekDaysMap: Record<number, WeekDay> = {
+      0: "domingo",
+      1: "segunda",
+      2: "terca",
+      3: "quarta",
+      4: "quinta",
+      5: "sexta",
+      6: "sabado",
+    };
+    
+    const start = new Date(eventStartDate + "T00:00:00");
+    const end = new Date(eventEndDate + "T00:00:00");
+    const orderedDays: WeekDay[] = [];
+    const daysSet = new Set(days);
+    
+    const current = new Date(start);
+    while (current <= end && orderedDays.length < days.length) {
+      const dayOfWeek = current.getDay();
+      const weekDay = weekDaysMap[dayOfWeek];
+      if (daysSet.has(weekDay) && !orderedDays.includes(weekDay)) {
+        orderedDays.push(weekDay);
+      }
+      current.setDate(current.getDate() + 1);
+    }
+    
+    return orderedDays;
+  };
+
+  const displayDays = getOrderedDays(isEditing ? tempSelectedDays : selectedDays);
 
   // Show loading state while data is being fetched
   if (isLoading) {
