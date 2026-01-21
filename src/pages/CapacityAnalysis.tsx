@@ -69,24 +69,20 @@ export default function CapacityAnalysis() {
     const timeSlots = Object.keys(capacityByTime).sort();
     const capacityValues = Object.values(capacityByTime);
 
-    const totalCapacity = capacityValues.reduce((sum, cap) => sum + cap, 0);
+    // Capacidade TOTAL do período = soma de TODOS os slots (conta o mesmo venue múltiplas vezes)
+    const totalPeriodCapacity = overlappingSlots.reduce((sum, slot) => {
+      const venue = venues.find((v) => v.id === slot.venueId);
+      return sum + (venue?.capacity || 0);
+    }, 0);
+
     const avgCapacity =
-      timeSlots.length > 0 ? Math.round(totalCapacity / timeSlots.length) : 0;
+      timeSlots.length > 0
+        ? Math.round(totalPeriodCapacity / timeSlots.length)
+        : 0;
     const maxCapacity =
       capacityValues.length > 0 ? Math.max(...capacityValues) : 0;
     const minCapacity =
       capacityValues.length > 0 ? Math.min(...capacityValues) : 0;
-
-    // Capacidade total considerando o período (soma única dos venues disponíveis)
-    const uniqueVenuesInPeriod = new Set<string>();
-    overlappingSlots.forEach((slot) => uniqueVenuesInPeriod.add(slot.venueId));
-    const totalPeriodCapacity = Array.from(uniqueVenuesInPeriod).reduce(
-      (sum, venueId) => {
-        const venue = venues.find((v) => v.id === venueId);
-        return sum + (venue?.capacity || 0);
-      },
-      0,
-    );
 
     return {
       capacityByTime,
