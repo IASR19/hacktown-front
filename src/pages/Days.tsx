@@ -182,10 +182,15 @@ export default function Days() {
   const handleSave = async () => {
     console.log("💾 Salvando dias:", tempSelectedDays);
     console.log("💾 Salvando datas:", tempStartDate, tempEndDate);
-    setSelectedDays(tempSelectedDays);
+    
+    // Salvar dias primeiro
+    await setSelectedDays(tempSelectedDays);
+    
+    // Depois salvar datas (se existirem)
     if (tempStartDate && tempEndDate) {
       await setEventDates(tempStartDate, tempEndDate);
     }
+    
     setIsEditing(false);
   };
 
@@ -336,8 +341,8 @@ export default function Days() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {WEEKDAYS_ORDER.map((day, index) => {
-              const isSelected = displayDays.includes(day);
+            {displayDays.map((day, index) => {
+              const isSelected = true; // Todos os dias em displayDays estão selecionados
               const activityCount = getActivityCountForDay(day);
               const slotCount = slotTemplates.filter((slot) =>
                 slot.days?.includes(day),
@@ -354,12 +359,7 @@ export default function Days() {
                     relative p-5 rounded-xl transition-all duration-300
                     border-2 group
                     ${isEditing ? "cursor-pointer" : "cursor-default"}
-                    ${
-                      isSelected
-                        ? "bg-gradient-to-br from-hacktown-cyan/20 to-hacktown-pink/10 border-hacktown-cyan/50 neon-glow"
-                        : "bg-muted/30 border-border/50"
-                    }
-                    ${isEditing && !isSelected ? "hover:border-hacktown-cyan/30 hover:bg-muted/50" : ""}
+                    bg-gradient-to-br from-hacktown-cyan/20 to-hacktown-pink/10 border-hacktown-cyan/50 neon-glow
                     ${!isEditing ? "opacity-90" : ""}
                   `}
                   style={{ animationDelay: `${index * 50}ms` }}
