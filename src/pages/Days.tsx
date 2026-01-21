@@ -24,8 +24,9 @@ const getWeekDaysBetweenDates = (
   startDate: string,
   endDate: string,
 ): WeekDay[] => {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
+  // Usar UTC para evitar problemas de timezone
+  const start = new Date(startDate + "T00:00:00");
+  const end = new Date(endDate + "T00:00:00");
   const weekDaysMap: Record<number, WeekDay> = {
     0: "domingo",
     1: "segunda",
@@ -37,9 +38,11 @@ const getWeekDaysBetweenDates = (
   };
   const uniqueDays = new Set<WeekDay>();
 
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const dayOfWeek = d.getDay();
+  const current = new Date(start);
+  while (current <= end) {
+    const dayOfWeek = current.getDay();
     uniqueDays.add(weekDaysMap[dayOfWeek]);
+    current.setDate(current.getDate() + 1);
   }
 
   // Ordenar pelos dias da semana
@@ -54,8 +57,9 @@ const getDateForWeekDay = (
   startDate: string,
   endDate: string,
 ): string => {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
+  // Usar UTC para evitar problemas de timezone
+  const start = new Date(startDate + "T00:00:00");
+  const end = new Date(endDate + "T00:00:00");
   const weekDaysMap: Record<number, WeekDay> = {
     0: "domingo",
     1: "segunda",
@@ -66,14 +70,16 @@ const getDateForWeekDay = (
     6: "sabado",
   };
 
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const dayOfWeek = d.getDay();
+  const current = new Date(start);
+  while (current <= end) {
+    const dayOfWeek = current.getDay();
     if (weekDaysMap[dayOfWeek] === weekDay) {
-      return d.toLocaleDateString("pt-BR", {
+      return current.toLocaleDateString("pt-BR", {
         day: "2-digit",
         month: "2-digit",
       });
     }
+    current.setDate(current.getDate() + 1);
   }
 
   return "";
