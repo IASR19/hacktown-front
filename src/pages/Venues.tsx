@@ -32,6 +32,8 @@ import {
   Lock,
   Upload,
   Download,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
@@ -54,6 +56,8 @@ export default function Venues() {
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [editingVenue, setEditingVenue] = useState<Venue | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedNucleo, setSelectedNucleo] = useState<string>("todos");
+  const [viewMode, setViewMode] = useState<"cards" | "list">("cards");
   const [isImporting, setIsImporting] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -72,18 +76,30 @@ export default function Venues() {
   const filteredVenues = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
     const filtered = venues
-      .filter(
-        (venue) =>
+      .filter((venue) => {
+        const matchesSearch =
           venue.name.toLowerCase().includes(query) ||
-          venue.code.toLowerCase().includes(query),
-      )
+          venue.code.toLowerCase().includes(query);
+        const matchesNucleo =
+          selectedNucleo === "todos" || venue.nucleo === selectedNucleo;
+        return matchesSearch && matchesNucleo;
+      })
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 
     console.log(
-      `📊 Total venues: ${venues.length}, Filtrados: ${filtered.length}, Query: "${query}"`,
+      `📊 Total venues: ${venues.length}, Filtrados: ${filtered.length}, Query: "${query}", Núcleo: "${selectedNucleo}"`,
     );
     return filtered;
-  }, [venues, searchQuery]);
+  }, [venues, searchQuery, selectedNucleo]);
+
+  // Obter núcleos únicos disponíveis
+  const availableNucleos = useMemo(() => {
+    const nucleos = new Set<string>();
+    venues.forEach((venue) => {
+      if (venue.nucleo) nucleos.add(venue.nucleo);
+    });
+    return Array.from(nucleos).sort();
+  }, [venues]);
 
   const resetForm = () => {
     setFormData({
@@ -674,16 +690,65 @@ export default function Venues() {
         </DialogContent>
       </Dialog>
 
-      {/* Search Filter */}
+      {/* Search and Filter */}
       {venues.length > 0 && (
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Pesquisar por nome ou código..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 bg-muted/50 border-border focus:border-hacktown-cyan"
-          />
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Pesquisar por nome ou código..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 bg-muted/50 border-border focus:border-hacktown-cyan"
+            />
+          </div>
+          <Select value={selectedNucleo} onValueChange={setSelectedNucleo}>
+            <SelectTrigger className="w-full sm:w-[200px] bg-muted/50 border-border">
+              <SelectValue placeholder="Filtrar por núcleo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  <span>Todos os Núcleos</span>
+                </div>
+              </SelectItem>
+              {availableNucleos.map((nucleo) => (
+                <SelectItem key={nucleo} value={nucleo}>
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-hacktown-cyan" />
+                    <span>{nucleo}</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="flex gap-2">
+            <Button
+              variant={viewMode === "cards" ? "default" : "outline"}
+              size="icon"
+              onClick={() => setViewMode("cards")}
+              className={
+                viewMode === "cards"
+                  ? "bg-hacktown-cyan hover:bg-hacktown-cyan/80"
+                  : ""
+              }
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === "list" ? "default" : "outline"}
+              size="icon"
+              onClick={() => setViewMode("list")}
+              className={
+                viewMode === "list"
+                  ? "bg-hacktown-cyan hover:bg-hacktown-cyan/80"
+                  : ""
+              }
+            >
+              <List className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       )}
 
@@ -715,7 +780,7 @@ export default function Venues() {
             </p>
           </CardContent>
         </Card>
-      ) : (
+      ) : viewMode === "cards" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredVenues.map((venue, index) => {
             const slotCount = getVenueSlotCount(venue.id);
@@ -813,6 +878,134 @@ export default function Venues() {
             );
           })}
         </div>
+      ) : (
+        <Card className="glass overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border/50 bg-muted/30">
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">
+                    Código
+                  </th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">
+                    Nome
+                  </th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">
+                    Local
+                  </th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">
+                    Núcleo
+                  </th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">
+                    Capacidade
+                  </th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">
+                    Slots
+                  </th>
+                  <th className="text-right p-4 text-sm font-medium text-muted-foreground">
+                    Ações
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredVenues.map((venue, index) => {
+                  const slotCount = getVenueSlotCount(venue.id);
+                  return (
+                    <tr
+                      key={venue.id}
+                      className="border-b border-border/30 hover:bg-muted/20 transition-colors"
+                      style={{ animationDelay: `${index * 30}ms` }}
+                    >
+                      <td className="p-4">
+                        <Badge
+                          variant="outline"
+                          className="border-hacktown-cyan/30 text-hacktown-cyan font-mono text-xs"
+                        >
+                          <Hash className="h-3 w-3 mr-1" />
+                          {venue.code}
+                        </Badge>
+                      </td>
+                      <td className="p-4">
+                        <div className="font-medium">{venue.name}</div>
+                        {venue.description && (
+                          <div className="text-sm text-muted-foreground/70 mt-1">
+                            {venue.description}
+                          </div>
+                        )}
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <MapPin className="h-4 w-4 text-hacktown-pink flex-shrink-0" />
+                          <span>{venue.location}</span>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <span className="text-sm text-muted-foreground">
+                          {venue.nucleo || "-"}
+                        </span>
+                      </td>
+                      <td className="p-4">
+                        <Badge className="bg-hacktown-cyan/20 text-hacktown-cyan border-hacktown-cyan/30 font-mono">
+                          <Users className="h-3 w-3 mr-1" />
+                          {venue.capacity}
+                        </Badge>
+                      </td>
+                      <td className="p-4">
+                        <Badge
+                          variant="outline"
+                          className="border-border text-muted-foreground font-mono"
+                        >
+                          {slotCount} slot(s)
+                        </Badge>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex gap-1 justify-end">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 hover:bg-hacktown-pink/20 hover:text-hacktown-pink"
+                            onClick={() => handleApplyDefaultSlots(venue.id)}
+                            title="Aplicar Horários Padrão"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              className="h-4 w-4"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <circle cx="12" cy="12" r="10" />
+                              <polyline points="12 6 12 12 16 14" />
+                            </svg>
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 hover:bg-hacktown-cyan/20 hover:text-hacktown-cyan"
+                            onClick={() => handleEdit(venue)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 hover:bg-destructive/20 text-destructive"
+                            onClick={() => handleDelete(venue)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
     </div>
   );

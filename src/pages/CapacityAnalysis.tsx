@@ -3,7 +3,14 @@ import { useHacktown } from "@/contexts/HacktownContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
-import { BarChart3, Clock, Users, TrendingUp } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { BarChart3, Clock, Users, TrendingUp, MapPin } from "lucide-react";
 
 // Converter hora string "HH:MM" para minutos desde meia-noite
 const timeToMinutes = (time: string): number => {
@@ -24,10 +31,28 @@ export default function CapacityAnalysis() {
   // Estado dos sliders (em minutos desde meia-noite)
   const [startTime, setStartTime] = useState(600); // 10:00
   const [endTime, setEndTime] = useState(1080); // 18:00
+  const [selectedNucleo, setSelectedNucleo] = useState<string>("todos");
 
   // Range de horários possíveis (6:00 até 23:59)
   const MIN_TIME = 360; // 6:00
   const MAX_TIME = 1439; // 23:59
+
+  // Filtrar venues por núcleo
+  const filteredVenues = useMemo(() => {
+    if (selectedNucleo === "todos") {
+      return venues;
+    }
+    return venues.filter((venue) => venue.nucleo === selectedNucleo);
+  }, [venues, selectedNucleo]);
+
+  // Obter núcleos únicos disponíveis
+  const availableNucleos = useMemo(() => {
+    const nucleos = new Set<string>();
+    venues.forEach((venue) => {
+      if (venue.nucleo) nucleos.add(venue.nucleo);
+    });
+    return Array.from(nucleos).sort();
+  }, [venues]);
 
   // Calcular capacidade no período selecionado
   const capacityData = useMemo(() => {
@@ -49,7 +74,7 @@ export default function CapacityAnalysis() {
     const slotsGrouped: Record<string, typeof slotTemplates> = {};
 
     overlappingSlots.forEach((slot) => {
-      const venue = venues.find((v) => v.id === slot.venueId);
+      const venue = filteredVenues.find((v) => v.id === slot.venueId);
       if (!venue) return;
 
       const timeKey = `${slot.startTime}-${slot.endTime}`;
@@ -71,7 +96,7 @@ export default function CapacityAnalysis() {
 
     // Capacidade TOTAL do período = soma de TODOS os slots (conta o mesmo venue múltiplas vezes)
     const totalPeriodCapacity = overlappingSlots.reduce((sum, slot) => {
-      const venue = venues.find((v) => v.id === slot.venueId);
+      const venue = filteredVenues.find((v) => v.id === slot.venueId);
       return sum + (venue?.capacity || 0);
     }, 0);
 
@@ -94,7 +119,7 @@ export default function CapacityAnalysis() {
       totalPeriodCapacity,
       timeSlots,
     };
-  }, [startTime, endTime, slotTemplates, venues]);
+  }, [startTime, endTime, slotTemplates, filteredVenues]);
 
   return (
     <div className="space-y-8">
@@ -116,6 +141,39 @@ export default function CapacityAnalysis() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-8">
+          {/* Filtro de Núcleo */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-muted-foreground">
+                Filtrar por Núcleo
+              </label>
+              <Badge className="bg-hacktown-purple/20 text-hacktown-purple border-hacktown-purple/30">
+                {selectedNucleo === "todos" ? "Todos" : selectedNucleo}
+              </Badge>
+            </div>
+            <Select value={selectedNucleo} onValueChange={setSelectedNucleo}>
+              <SelectTrigger className="bg-muted/50 border-border">
+                <SelectValue placeholder="Selecione um núcleo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                    <span>Todos os Núcleos</span>
+                  </div>
+                </SelectItem>
+                {availableNucleos.map((nucleo) => (
+                  <SelectItem key={nucleo} value={nucleo}>
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-hacktown-cyan" />
+                      <span>{nucleo}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Horário de Início */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
