@@ -169,7 +169,9 @@ export function AppSidebar() {
                         <item.icon
                           className={`h-5 w-5 ${item.color} group-hover:scale-110 transition-transform`}
                         />
-                        <span className="font-medium">{item.title}</span>
+                        <span className="font-medium flex-1 text-left whitespace-nowrap">
+                          {item.title}
+                        </span>
                       </NavLink>
                     </SidebarMenuButton>
                   )}
