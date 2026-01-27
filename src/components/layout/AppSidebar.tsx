@@ -58,13 +58,6 @@ const menuItems = [
     icon: TrendingUp,
     color: "text-hacktown-purple",
   },
-  {
-    title: "Atividades",
-    url: "/talks",
-    icon: Mic2,
-    color: "text-hacktown-pink",
-    disabled: true,
-  },
 ];
 
 export function AppSidebar() {
