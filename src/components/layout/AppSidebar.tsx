@@ -9,9 +9,12 @@ import {
   Lock,
   LogOut,
   User,
+  ChevronRight,
+  Layers,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -25,6 +28,11 @@ import {
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 const menuItems = [
   {
@@ -34,35 +42,55 @@ const menuItems = [
     color: "text-hacktown-cyan",
   },
   {
-    title: "Dias",
-    url: "/days",
-    icon: Calendar,
-    color: "text-hacktown-purple",
+    title: "Gestão de Capacidade",
+    icon: Layers,
+    color: "text-hacktown-green",
+    subItems: [
+      {
+        title: "Dias",
+        url: "/days",
+        icon: Calendar,
+        color: "text-hacktown-purple",
+      },
+      {
+        title: "Slots",
+        url: "/slots",
+        icon: Clock,
+        color: "text-hacktown-cyan",
+      },
+      {
+        title: "Ajuste de Capacidade",
+        url: "/capacity",
+        icon: BarChart3,
+        color: "text-hacktown-green",
+      },
+      {
+        title: "Análise de Capacidade",
+        url: "/capacity-analysis",
+        icon: TrendingUp,
+        color: "text-hacktown-purple",
+      },
+    ],
   },
   {
-    title: "Venues",
-    url: "/venues",
+    title: "Gestão de Venues",
     icon: MapPin,
     color: "text-hacktown-pink",
-  },
-  { title: "Slots", url: "/slots", icon: Clock, color: "text-hacktown-cyan" },
-  {
-    title: "Gestão de Capacidade",
-    url: "/capacity",
-    icon: BarChart3,
-    color: "text-hacktown-green",
-  },
-  {
-    title: "Análise de Capacidade",
-    url: "/capacity-analysis",
-    icon: TrendingUp,
-    color: "text-hacktown-purple",
+    subItems: [
+      {
+        title: "Cadastro de Venues",
+        url: "/venues",
+        icon: MapPin,
+        color: "text-hacktown-pink",
+      },
+    ],
   },
 ];
 
 export function AppSidebar() {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -85,17 +113,53 @@ export function AppSidebar() {
                   style={{ animationDelay: `${index * 50}ms` }}
                   className="animate-slide-in"
                 >
-                  <SidebarMenuButton
-                    asChild={!item.disabled}
-                    disabled={item.disabled}
-                  >
-                    {item.disabled ? (
-                      <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-sidebar-foreground/40 cursor-not-allowed">
-                        <item.icon className="h-5 w-5 text-muted-foreground/40" />
-                        <span className="font-medium">{item.title}</span>
-                        <Lock className="h-4 w-4 ml-auto text-amber-500/70" />
-                      </div>
-                    ) : (
+                  {item.subItems ? (
+                    <Popover open={hoveredItem === item.title}>
+                      <PopoverTrigger asChild>
+                        <div
+                          onMouseEnter={() => setHoveredItem(item.title)}
+                          onMouseLeave={() => setHoveredItem(null)}
+                        >
+                          <SidebarMenuButton className="flex items-center gap-3 px-4 py-3 rounded-xl text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-all duration-200 group w-full cursor-pointer">
+                            <item.icon
+                              className={`h-5 w-5 flex-shrink-0 ${item.color} group-hover:scale-110 transition-transform`}
+                            />
+                            <span className="font-medium flex-1 text-left whitespace-nowrap">
+                              {item.title}
+                            </span>
+                            <ChevronRight className="h-4 w-4 flex-shrink-0" />
+                          </SidebarMenuButton>
+                        </div>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        side="right"
+                        align="start"
+                        className="w-64 p-2 glass border-sidebar-border/50"
+                        onMouseEnter={() => setHoveredItem(item.title)}
+                        onMouseLeave={() => setHoveredItem(null)}
+                      >
+                        <div className="space-y-1">
+                          {item.subItems.map((subItem) => (
+                            <NavLink
+                              key={subItem.title}
+                              to={subItem.url}
+                              className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-all duration-200 group"
+                              activeClassName="bg-gradient-to-r from-hacktown-cyan/20 to-hacktown-pink/10 text-sidebar-foreground border border-hacktown-cyan/30 neon-glow"
+                              onClick={() => setHoveredItem(null)}
+                            >
+                              <subItem.icon
+                                className={`h-4 w-4 ${subItem.color} group-hover:scale-110 transition-transform`}
+                              />
+                              <span className="font-medium text-sm">
+                                {subItem.title}
+                              </span>
+                            </NavLink>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  ) : (
+                    <SidebarMenuButton>
                       <NavLink
                         to={item.url}
                         end={item.url === "/dashboard"}
@@ -107,8 +171,8 @@ export function AppSidebar() {
                         />
                         <span className="font-medium">{item.title}</span>
                       </NavLink>
-                    )}
-                  </SidebarMenuButton>
+                    </SidebarMenuButton>
+                  )}
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>

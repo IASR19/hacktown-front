@@ -366,7 +366,9 @@ export default function Venues() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div className="space-y-2">
-          <h1 className="text-4xl font-bold gradient-text">Venues</h1>
+          <h1 className="text-4xl font-bold gradient-text">
+            Cadastro de Venues
+          </h1>
           <p className="text-muted-foreground text-lg">
             Gerencie os pontos de atividade
           </p>
