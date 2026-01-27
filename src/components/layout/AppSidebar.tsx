@@ -124,7 +124,7 @@ export function AppSidebar() {
                             <item.icon
                               className={`h-5 w-5 flex-shrink-0 ${item.color} group-hover:scale-110 transition-transform`}
                             />
-                              <span className="font-medium flex-1 text-left whitespace-nowrap items-center">
+                            <span className="font-medium flex-1 text-left whitespace-nowrap items-center">
                               {item.title}
                             </span>
                             <ChevronRight className="h-4 w-4 flex-shrink-0" />
