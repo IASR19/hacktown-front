@@ -57,6 +57,8 @@ export default function Venues() {
   const [editingVenue, setEditingVenue] = useState<Venue | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedNucleo, setSelectedNucleo] = useState<string>("todos");
+  const [selectedStructureType, setSelectedStructureType] =
+    useState<string>("todos");
   const [viewMode, setViewMode] = useState<"cards" | "list">("cards");
   const [isImporting, setIsImporting] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -82,15 +84,18 @@ export default function Venues() {
           venue.code.toLowerCase().includes(query);
         const matchesNucleo =
           selectedNucleo === "todos" || venue.nucleo === selectedNucleo;
-        return matchesSearch && matchesNucleo;
+        const matchesStructureType =
+          selectedStructureType === "todos" ||
+          venue.structureType === selectedStructureType;
+        return matchesSearch && matchesNucleo && matchesStructureType;
       })
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 
     console.log(
-      `📊 Total venues: ${venues.length}, Filtrados: ${filtered.length}, Query: "${query}", Núcleo: "${selectedNucleo}"`,
+      `📊 Total venues: ${venues.length}, Filtrados: ${filtered.length}, Query: "${query}", Núcleo: "${selectedNucleo}", Tipo: "${selectedStructureType}"`,
     );
     return filtered;
-  }, [venues, searchQuery, selectedNucleo]);
+  }, [venues, searchQuery, selectedNucleo, selectedStructureType]);
 
   // Obter núcleos únicos disponíveis
   const availableNucleos = useMemo(() => {
@@ -99,6 +104,15 @@ export default function Venues() {
       if (venue.nucleo) nucleos.add(venue.nucleo);
     });
     return Array.from(nucleos).sort();
+  }, [venues]);
+
+  // Obter tipos de estrutura únicos disponíveis
+  const availableStructureTypes = useMemo(() => {
+    const types = new Set<string>();
+    venues.forEach((venue) => {
+      if (venue.structureType) types.add(venue.structureType);
+    });
+    return Array.from(types).sort();
   }, [venues]);
 
   const resetForm = () => {
@@ -718,6 +732,32 @@ export default function Venues() {
                   <div className="flex items-center gap-2">
                     <MapPin className="h-4 w-4 text-hacktown-cyan" />
                     <span>{nucleo}</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={selectedStructureType}
+            onValueChange={setSelectedStructureType}
+          >
+            <SelectTrigger className="w-full sm:w-[200px] bg-muted/50 border-border">
+              <SelectValue placeholder="Filtrar por tipo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">
+                <div className="flex items-center gap-2">
+                  <Hash className="h-4 w-4 text-muted-foreground" />
+                  <span>Todos os Tipos</span>
+                </div>
+              </SelectItem>
+              {availableStructureTypes.map((type) => (
+                <SelectItem key={type} value={type}>
+                  <div className="flex items-center gap-2">
+                    <Hash className="h-4 w-4 text-hacktown-pink" />
+                    <span>
+                      {VENUE_STRUCTURE_LABELS[type as VenueStructureType]}
+                    </span>
                   </div>
                 </SelectItem>
               ))}
