@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useHacktown } from "@/contexts/HacktownContext";
 import { venuesService } from "@/services/api";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,8 @@ import {
   Download,
   LayoutGrid,
   List,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
@@ -41,6 +43,10 @@ import {
   Venue,
   VenueStructureType,
   VENUE_STRUCTURE_LABELS,
+  ActivityType,
+  ACTIVITY_TYPE_LABELS,
+  WeekDay,
+  WEEKDAY_SHORT_LABELS,
 } from "@/types/hacktown";
 
 export default function Venues() {
@@ -51,6 +57,11 @@ export default function Venues() {
     deleteVenue,
     slotTemplates,
     refetchAll,
+    selectedDays,
+    venueDayActivities,
+    updateVenueDayActivity,
+    eventStartDate,
+    eventEndDate,
   } = useHacktown();
   const [isOpen, setIsOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
@@ -63,6 +74,7 @@ export default function Venues() {
   const [isImporting, setIsImporting] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [expandedVenues, setExpandedVenues] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     code: "",
@@ -225,6 +237,125 @@ export default function Venues() {
 
   const getVenueSlotCount = (venueId: string) => {
     return slotTemplates.filter((s) => s.venueId === venueId).length;
+  };
+
+  const toggleVenueExpanded = (venueId: string) => {
+    setExpandedVenues((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(venueId)) {
+        newSet.delete(venueId);
+      } else {
+        newSet.add(venueId);
+      }
+      return newSet;
+    });
+  };
+
+  const getDayWithDate = (day: WeekDay): string => {
+    const dayLabel = WEEKDAY_SHORT_LABELS[day];
+
+    if (!eventStartDate || !eventEndDate) {
+      return dayLabel;
+    }
+
+    try {
+      const startDate = new Date(eventStartDate + "T00:00:00");
+      const endDate = new Date(eventEndDate + "T00:00:00");
+
+      // Mapear dia da semana para número (0 = domingo, 1 = segunda, etc)
+      const weekDayMap: Record<WeekDay, number> = {
+        domingo: 0,
+        segunda: 1,
+        terca: 2,
+        quarta: 3,
+        quinta: 4,
+        sexta: 5,
+        sabado: 6,
+      };
+
+      const targetDayNumber = weekDayMap[day];
+
+      // Procurar a primeira ocorrência desse dia da semana no período do evento
+      const currentDate = new Date(startDate);
+      while (currentDate <= endDate) {
+        if (currentDate.getDay() === targetDayNumber) {
+          const dateStr = currentDate.toLocaleDateString("pt-BR", {
+            day: "2-digit",
+            month: "2-digit",
+          });
+          return `${dayLabel} (${dateStr})`;
+        }
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      return dayLabel;
+    } catch {
+      return dayLabel;
+    }
+  };
+
+  const getSortedDays = (): WeekDay[] => {
+    if (!eventStartDate || !eventEndDate) {
+      return selectedDays;
+    }
+
+    try {
+      const startDate = new Date(eventStartDate + "T00:00:00");
+      const endDate = new Date(eventEndDate + "T00:00:00");
+
+      const weekDayMap: Record<WeekDay, number> = {
+        domingo: 0,
+        segunda: 1,
+        terca: 2,
+        quarta: 3,
+        quinta: 4,
+        sexta: 5,
+        sabado: 6,
+      };
+
+      // Mapear cada dia para sua data
+      const daysWithDates = selectedDays.map((day) => {
+        const targetDayNumber = weekDayMap[day];
+        const currentDate = new Date(startDate);
+        
+        while (currentDate <= endDate) {
+          if (currentDate.getDay() === targetDayNumber) {
+            return { day, date: new Date(currentDate) };
+          }
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+        
+        // Se não encontrar a data, retorna com data muito alta para ir pro final
+        return { day, date: new Date("9999-12-31") };
+      });
+
+      // Ordenar por data
+      daysWithDates.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+      return daysWithDates.map(d => d.day);
+    } catch {
+      return selectedDays;
+    }
+  };
+
+  const getVenueDayActivity = (venueId: string, day: WeekDay) => {
+    return venueDayActivities.find(
+      (vda) => vda.venueId === venueId && vda.day === day,
+    );
+  };
+
+  const handleActivityTypeChange = async (
+    venueId: string,
+    day: WeekDay,
+    activityType: ActivityType,
+  ) => {
+    try {
+      await updateVenueDayActivity(venueId, day, activityType);
+      toast.success("Tipo de atividade atualizado!");
+    } catch (error) {
+      console.error("Erro ao atualizar tipo de atividade:", error);
+      toast.error("Erro ao atualizar tipo de atividade");
+    }
   };
 
   const handleFileUpload = async (
@@ -889,10 +1020,24 @@ export default function Venues() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-hacktown-pink" />
-                    {venue.location}
-                  </p>
+                  {/* Venue Info - Always Visible */}
+                  <div
+                    className="cursor-pointer"
+                    onClick={() => toggleVenueExpanded(venue.id)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-muted-foreground flex items-center gap-2">
+                        <MapPin className="h-4 w-4 text-hacktown-pink" />
+                        {venue.location}
+                      </p>
+                      {expandedVenues.has(venue.id) ? (
+                        <ChevronUp className="h-4 w-4 text-hacktown-cyan" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-hacktown-cyan" />
+                      )}
+                    </div>
+                  </div>
+
                   {venue.nucleo && (
                     <p className="text-sm text-muted-foreground/80">
                       Núcleo: {venue.nucleo}
@@ -915,6 +1060,58 @@ export default function Venues() {
                       {slotCount} slot(s)
                     </Badge>
                   </div>
+
+                  {/* Expandable Days Section */}
+                  {expandedVenues.has(venue.id) && selectedDays.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-border/50 space-y-3">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        Tipo de Atividade por Dia
+                      </p>
+                      {getSortedDays().map((day) => {
+                        const venueDayActivity = getVenueDayActivity(
+                          venue.id,
+                          day,
+                        );
+                        return (
+                          <div
+                            key={day}
+                            className="flex items-center justify-between gap-3 p-2 rounded-lg bg-muted/30"
+                          >
+                            <span className="text-sm font-medium">
+                              {getDayWithDate(day)}
+                            </span>
+                            <Select
+                              value={
+                                venueDayActivity?.activityType || "palestra"
+                              }
+                              onValueChange={(value) =>
+                                handleActivityTypeChange(
+                                  venue.id,
+                                  day,
+                                  value as ActivityType,
+                                )
+                              }
+                            >
+                              <SelectTrigger className="w-[140px] h-8 text-xs bg-background">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(
+                                  Object.keys(
+                                    ACTIVITY_TYPE_LABELS,
+                                  ) as ActivityType[]
+                                ).map((type) => (
+                                  <SelectItem key={type} value={type}>
+                                    {ACTIVITY_TYPE_LABELS[type]}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );
@@ -952,96 +1149,167 @@ export default function Venues() {
               <tbody>
                 {filteredVenues.map((venue, index) => {
                   const slotCount = getVenueSlotCount(venue.id);
+                  const isExpanded = expandedVenues.has(venue.id);
                   return (
-                    <tr
-                      key={venue.id}
-                      className="border-b border-border/30 hover:bg-muted/20 transition-colors"
-                      style={{ animationDelay: `${index * 30}ms` }}
-                    >
-                      <td className="p-4">
-                        <Badge
-                          variant="outline"
-                          className="border-hacktown-cyan/30 text-hacktown-cyan font-mono text-xs"
-                        >
-                          <Hash className="h-3 w-3 mr-1" />
-                          {venue.code}
-                        </Badge>
-                      </td>
-                      <td className="p-4">
-                        <div className="font-medium">{venue.name}</div>
-                        {venue.description && (
-                          <div className="text-sm text-muted-foreground/70 mt-1">
-                            {venue.description}
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <MapPin className="h-4 w-4 text-hacktown-pink flex-shrink-0" />
-                          <span>{venue.location}</span>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <span className="text-sm text-muted-foreground">
-                          {venue.nucleo || "-"}
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        <Badge className="bg-hacktown-cyan/20 text-hacktown-cyan border-hacktown-cyan/30 font-mono">
-                          <Users className="h-3 w-3 mr-1" />
-                          {venue.capacity}
-                        </Badge>
-                      </td>
-                      <td className="p-4">
-                        <Badge
-                          variant="outline"
-                          className="border-border text-muted-foreground font-mono"
-                        >
-                          {slotCount} slot(s)
-                        </Badge>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex gap-1 justify-end">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 hover:bg-hacktown-pink/20 hover:text-hacktown-pink"
-                            onClick={() => handleApplyDefaultSlots(venue.id)}
-                            title="Aplicar Horários Padrão"
-                          >
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              className="h-4 w-4"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
+                    <React.Fragment key={venue.id}>
+                      <tr
+                        className="border-b border-border/30 hover:bg-muted/20 transition-colors cursor-pointer"
+                        style={{ animationDelay: `${index * 30}ms` }}
+                        onClick={() => toggleVenueExpanded(venue.id)}
+                      >
+                        <td className="p-4">
+                          <div className="flex items-center gap-2">
+                            {isExpanded ? (
+                              <ChevronUp className="h-4 w-4 text-hacktown-cyan" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4 text-hacktown-cyan" />
+                            )}
+                            <Badge
+                              variant="outline"
+                              className="border-hacktown-cyan/30 text-hacktown-cyan font-mono text-xs"
                             >
-                              <circle cx="12" cy="12" r="10" />
-                              <polyline points="12 6 12 12 16 14" />
-                            </svg>
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 hover:bg-hacktown-cyan/20 hover:text-hacktown-cyan"
-                            onClick={() => handleEdit(venue)}
+                              <Hash className="h-3 w-3 mr-1" />
+                              {venue.code}
+                            </Badge>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <div className="font-medium">{venue.name}</div>
+                          {venue.description && (
+                            <div className="text-sm text-muted-foreground/70 mt-1">
+                              {venue.description}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <MapPin className="h-4 w-4 text-hacktown-pink flex-shrink-0" />
+                            <span>{venue.location}</span>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <span className="text-sm text-muted-foreground">
+                            {venue.nucleo || "-"}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          <Badge className="bg-hacktown-cyan/20 text-hacktown-cyan border-hacktown-cyan/30 font-mono">
+                            <Users className="h-3 w-3 mr-1" />
+                            {venue.capacity}
+                          </Badge>
+                        </td>
+                        <td className="p-4">
+                          <Badge
+                            variant="outline"
+                            className="border-border text-muted-foreground font-mono"
                           >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 hover:bg-destructive/20 text-destructive"
-                            onClick={() => handleDelete(venue)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
+                            {slotCount} slot(s)
+                          </Badge>
+                        </td>
+                        <td
+                          className="p-4"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="flex gap-1 justify-end">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 hover:bg-hacktown-pink/20 hover:text-hacktown-pink"
+                              onClick={() => handleApplyDefaultSlots(venue.id)}
+                              title="Aplicar Horários Padrão"
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="h-4 w-4"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <circle cx="12" cy="12" r="10" />
+                                <polyline points="12 6 12 12 16 14" />
+                              </svg>
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 hover:bg-hacktown-cyan/20 hover:text-hacktown-cyan"
+                              onClick={() => handleEdit(venue)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 hover:bg-destructive/20 text-destructive"
+                              onClick={() => handleDelete(venue)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                      {/* Expandable Days Row */}
+                      {isExpanded && selectedDays.length > 0 && (
+                        <tr className="bg-muted/10">
+                          <td colSpan={7} className="p-4">
+                            <div className="space-y-2">
+                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                                Tipo de Atividade por Dia
+                              </p>
+                              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                {getSortedDays().map((day) => {
+                                  const venueDayActivity = getVenueDayActivity(
+                                    venue.id,
+                                    day,
+                                  );
+                                  return (
+                                    <div
+                                      key={day}
+                                      className="flex items-center justify-between gap-2 p-2 rounded-lg bg-background/50"
+                                    >
+                                      <span className="text-sm font-medium">
+                                        {getDayWithDate(day)}
+                                      </span>
+                                      <Select
+                                        value={
+                                          venueDayActivity?.activityType ||
+                                          "palestra"
+                                        }
+                                        onValueChange={(value) =>
+                                          handleActivityTypeChange(
+                                            venue.id,
+                                            day,
+                                            value as ActivityType,
+                                          )
+                                        }
+                                      >
+                                        <SelectTrigger className="w-[120px] h-8 text-xs">
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {(
+                                            Object.keys(
+                                              ACTIVITY_TYPE_LABELS,
+                                            ) as ActivityType[]
+                                          ).map((type) => (
+                                            <SelectItem key={type} value={type}>
+                                              {ACTIVITY_TYPE_LABELS[type]}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   );
                 })}
               </tbody>

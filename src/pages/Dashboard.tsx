@@ -18,13 +18,96 @@ import {
 const SHOW_VENUE_PROGRAMMING = false; // Desabilitado até Atividades estar ativo
 
 export default function Dashboard() {
-  const { getVenuesWithSlots, venues, selectedDays, isLoading } = useHacktown();
+  const { getVenuesWithSlots, venues, selectedDays, eventStartDate, eventEndDate, isLoading } = useHacktown();
   const venuesWithSlots = getVenuesWithSlots();
 
   // Filters
   const [filterDay, setFilterDay] = useState<string>('all');
   const [filterNucleo, setFilterNucleo] = useState<string>('all');
   const [filterStructure, setFilterStructure] = useState<string>('all');
+
+  // Função para formatar dia com data
+  const getDayWithDate = (day: WeekDay): string => {
+    const dayLabel = WEEKDAY_SHORT_LABELS[day];
+
+    if (!eventStartDate || !eventEndDate) {
+      return dayLabel;
+    }
+
+    try {
+      const startDate = new Date(eventStartDate + "T00:00:00");
+      const endDate = new Date(eventEndDate + "T00:00:00");
+
+      const weekDayMap: Record<WeekDay, number> = {
+        domingo: 0,
+        segunda: 1,
+        terca: 2,
+        quarta: 3,
+        quinta: 4,
+        sexta: 5,
+        sabado: 6,
+      };
+
+      const targetDayNumber = weekDayMap[day];
+      const currentDate = new Date(startDate);
+      
+      while (currentDate <= endDate) {
+        if (currentDate.getDay() === targetDayNumber) {
+          const dateStr = currentDate.toLocaleDateString("pt-BR", {
+            day: "2-digit",
+            month: "2-digit",
+          });
+          return `${dayLabel} - ${dateStr}`;
+        }
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      return dayLabel;
+    } catch {
+      return dayLabel;
+    }
+  };
+
+  // Função para ordenar dias por data do mês
+  const getSortedDays = (): WeekDay[] => {
+    if (!eventStartDate || !eventEndDate) {
+      return selectedDays;
+    }
+
+    try {
+      const startDate = new Date(eventStartDate + "T00:00:00");
+      const endDate = new Date(eventEndDate + "T00:00:00");
+
+      const weekDayMap: Record<WeekDay, number> = {
+        domingo: 0,
+        segunda: 1,
+        terca: 2,
+        quarta: 3,
+        quinta: 4,
+        sexta: 5,
+        sabado: 6,
+      };
+
+      const daysWithDates = selectedDays.map((day) => {
+        const targetDayNumber = weekDayMap[day];
+        const currentDate = new Date(startDate);
+        
+        while (currentDate <= endDate) {
+          if (currentDate.getDay() === targetDayNumber) {
+            return { day, date: new Date(currentDate) };
+          }
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+        
+        return { day, date: new Date("9999-12-31") };
+      });
+
+      daysWithDates.sort((a, b) => a.date.getTime() - b.date.getTime());
+      return daysWithDates.map(d => d.day);
+    } catch {
+      return selectedDays;
+    }
+  };
 
   // Auto-reload no primeiro acesso após login para carregar dados
   useEffect(() => {
@@ -136,14 +219,14 @@ export default function Dashboard() {
             </div>
             <div className="flex flex-wrap gap-3">
               <Select value={filterDay} onValueChange={setFilterDay}>
-                <SelectTrigger className="w-[160px] bg-muted/50 border-border">
+                <SelectTrigger className="w-[180px] bg-muted/50 border-border">
                   <SelectValue placeholder="Dia" />
                 </SelectTrigger>
                 <SelectContent className="glass-strong border-border">
                   <SelectItem value="all">Todos os dias</SelectItem>
-                  {selectedDays.map((day) => (
+                  {getSortedDays().map((day) => (
                     <SelectItem key={day} value={day}>
-                      {WEEKDAY_SHORT_LABELS[day]}
+                      {getDayWithDate(day)}
                     </SelectItem>
                   ))}
                 </SelectContent>

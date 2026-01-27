@@ -64,6 +64,22 @@ export const WEEKDAYS_ORDER: WeekDay[] = [
   "domingo",
 ];
 
+export type ActivityType = "musica" | "palestra" | "painel" | "workshop";
+
+export const ACTIVITY_TYPE_LABELS: Record<ActivityType, string> = {
+  musica: "Música",
+  palestra: "Palestra",
+  painel: "Painel",
+  workshop: "Workshop",
+};
+
+export interface VenueDayActivity {
+  id: string;
+  venueId: string;
+  day: WeekDay;
+  activityType: ActivityType;
+}
+
 export interface EventConfig {
   id: string;
   selectedDays: WeekDay[];

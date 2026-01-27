@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, {
   createContext,
   useContext,
@@ -14,6 +15,7 @@ import {
   ComputedSlot,
   WeekDay,
   WEEKDAYS_ORDER,
+  VenueDayActivity,
 } from "@/types/hacktown";
 import {
   venuesService,
@@ -21,6 +23,7 @@ import {
   slotTemplatesService,
   daySlotActivitiesService,
   eventConfigService,
+  venueDayActivitiesService,
 } from "@/services/api";
 
 interface HacktownContextType {
@@ -61,6 +64,14 @@ interface HacktownContextType {
   ) => void;
   removeActivityFromSlot: (slotTemplateId: string, day: WeekDay) => void;
 
+  // Venue Day Activities
+  venueDayActivities: VenueDayActivity[];
+  updateVenueDayActivity: (
+    venueId: string,
+    day: WeekDay,
+    activityType: string,
+  ) => Promise<void>;
+
   // Computed data
   getVenuesWithSlots: (filterDay?: WeekDay) => VenueWithSlots[];
   getSlotsByDay: (day: WeekDay) => ComputedSlot[];
@@ -80,6 +91,9 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
   const [daySlotActivities, setDaySlotActivities] = useState<DaySlotActivity[]>(
     [],
   );
+  const [venueDayActivities, setVenueDayActivities] = useState<
+    VenueDayActivity[]
+  >([]);
   const [isLoading, setIsLoading] = useState(() => {
     // Inicializa baseado na presença do token
     return !!localStorage.getItem("token");
@@ -92,15 +106,22 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
 
     try {
       console.log("🔄 Recarregando todos os dados...");
-      const [venuesData, templatesData, activitiesData] = await Promise.all([
+      const [
+        venuesData,
+        templatesData,
+        activitiesData,
+        venueDayActivitiesData,
+      ] = await Promise.all([
         venuesService.getAll(),
         slotTemplatesService.getAll(),
         daySlotActivitiesService.getAll(),
+        venueDayActivitiesService.getAll(),
       ]);
 
       setVenues(venuesData);
       setSlotTemplates(templatesData);
       setDaySlotActivities(activitiesData);
+      setVenueDayActivities(venueDayActivitiesData);
       console.log("✅ Dados recarregados com sucesso");
     } catch (error) {
       console.error("❌ Erro ao recarregar dados:", error);
@@ -138,10 +159,12 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
         Promise.all([
           slotTemplatesService.getAll(),
           daySlotActivitiesService.getAll(),
+          venueDayActivitiesService.getAll(),
         ])
-          .then(([templatesData, activitiesData]) => {
+          .then(([templatesData, activitiesData, venueDayActivitiesData]) => {
             setSlotTemplates(templatesData);
             setDaySlotActivities(activitiesData);
+            setVenueDayActivities(venueDayActivitiesData);
             console.log("✅ Dados secundários carregados");
           })
           .catch((error) => {
@@ -375,6 +398,36 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Venue Day Activities
+  const updateVenueDayActivity = async (
+    venueId: string,
+    day: WeekDay,
+    activityType: string,
+  ) => {
+    try {
+      const updated = await venueDayActivitiesService.updateByVenueAndDay(
+        venueId,
+        day,
+        activityType,
+      );
+      setVenueDayActivities((prev) => {
+        const existing = prev.find(
+          (vda) => vda.venueId === venueId && vda.day === day,
+        );
+        if (existing) {
+          return prev.map((vda) =>
+            vda.venueId === venueId && vda.day === day ? updated : vda,
+          );
+        } else {
+          return [...prev, updated];
+        }
+      });
+    } catch (error) {
+      console.error("Failed to update venue day activity:", error);
+      throw error;
+    }
+  };
+
   // Computed data
   const getAllComputedSlots = (): ComputedSlot[] => {
     const slots: ComputedSlot[] = [];
@@ -449,6 +502,8 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
         addActivityToSlot,
         updateActivityInSlot,
         removeActivityFromSlot,
+        venueDayActivities,
+        updateVenueDayActivity,
         getVenuesWithSlots,
         getSlotsByDay,
         getAllComputedSlots,

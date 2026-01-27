@@ -6,6 +6,7 @@ import {
   DaySlotActivity,
   WeekDay,
   EventConfig,
+  VenueDayActivity,
 } from "@/types/hacktown";
 
 // Event Config Service
@@ -206,5 +207,29 @@ export const daySlotActivitiesService = {
 
   async delete(id: number): Promise<void> {
     return apiClient.delete<void>(`/day-slot-activities/${id}`);
+  },
+};
+
+// Venue Day Activities Service
+export const venueDayActivitiesService = {
+  async getAll(): Promise<VenueDayActivity[]> {
+    return apiClient.get<VenueDayActivity[]>("/venue-day-activities");
+  },
+
+  async getByVenue(venueId: string): Promise<VenueDayActivity[]> {
+    return apiClient.get<VenueDayActivity[]>(
+      `/venue-day-activities/venue/${venueId}`,
+    );
+  },
+
+  async updateByVenueAndDay(
+    venueId: string,
+    day: WeekDay,
+    activityType: string,
+  ): Promise<VenueDayActivity> {
+    return apiClient.put<VenueDayActivity>(
+      `/venue-day-activities/venue/${venueId}/day/${day}`,
+      { activityType },
+    );
   },
 };
