@@ -36,6 +36,7 @@ import {
   List,
   ChevronDown,
   ChevronUp,
+  ArrowUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
@@ -60,8 +61,6 @@ export default function Venues() {
     selectedDays,
     venueDayActivities,
     updateVenueDayActivity,
-    eventStartDate,
-    eventEndDate,
   } = useHacktown();
   const [isOpen, setIsOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
@@ -71,6 +70,7 @@ export default function Venues() {
   const [selectedStructureType, setSelectedStructureType] =
     useState<string>("todos");
   const [viewMode, setViewMode] = useState<"cards" | "list">("cards");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [isImporting, setIsImporting] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -101,13 +101,20 @@ export default function Venues() {
           venue.structureType === selectedStructureType;
         return matchesSearch && matchesNucleo && matchesStructureType;
       })
-      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+      .sort((a, b) => {
+        if (sortDirection === "asc") {
+          return a.name.localeCompare(b.name, "pt-BR");
+        } else if (sortDirection === "desc") {
+          return b.name.localeCompare(a.name, "pt-BR");
+        }
+        return a.name.localeCompare(b.name, "pt-BR");
+      });
 
     console.log(
       `📊 Total venues: ${venues.length}, Filtrados: ${filtered.length}, Query: "${query}", Núcleo: "${selectedNucleo}", Tipo: "${selectedStructureType}"`,
     );
     return filtered;
-  }, [venues, searchQuery, selectedNucleo, selectedStructureType]);
+  }, [venues, searchQuery, selectedNucleo, selectedStructureType, sortDirection]);
 
   // Obter núcleos únicos disponíveis
   const availableNucleos = useMemo(() => {
@@ -249,93 +256,6 @@ export default function Venues() {
       }
       return newSet;
     });
-  };
-
-  const getDayWithDate = (day: WeekDay): string => {
-    const dayLabel = WEEKDAY_SHORT_LABELS[day];
-
-    if (!eventStartDate || !eventEndDate) {
-      return dayLabel;
-    }
-
-    try {
-      const startDate = new Date(eventStartDate + "T00:00:00");
-      const endDate = new Date(eventEndDate + "T00:00:00");
-
-      // Mapear dia da semana para número (0 = domingo, 1 = segunda, etc)
-      const weekDayMap: Record<WeekDay, number> = {
-        domingo: 0,
-        segunda: 1,
-        terca: 2,
-        quarta: 3,
-        quinta: 4,
-        sexta: 5,
-        sabado: 6,
-      };
-
-      const targetDayNumber = weekDayMap[day];
-
-      // Procurar a primeira ocorrência desse dia da semana no período do evento
-      const currentDate = new Date(startDate);
-      while (currentDate <= endDate) {
-        if (currentDate.getDay() === targetDayNumber) {
-          const dateStr = currentDate.toLocaleDateString("pt-BR", {
-            day: "2-digit",
-            month: "2-digit",
-          });
-          return `${dayLabel} (${dateStr})`;
-        }
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
-
-      return dayLabel;
-    } catch {
-      return dayLabel;
-    }
-  };
-
-  const getSortedDays = (): WeekDay[] => {
-    if (!eventStartDate || !eventEndDate) {
-      return selectedDays;
-    }
-
-    try {
-      const startDate = new Date(eventStartDate + "T00:00:00");
-      const endDate = new Date(eventEndDate + "T00:00:00");
-
-      const weekDayMap: Record<WeekDay, number> = {
-        domingo: 0,
-        segunda: 1,
-        terca: 2,
-        quarta: 3,
-        quinta: 4,
-        sexta: 5,
-        sabado: 6,
-      };
-
-      // Mapear cada dia para sua data
-      const daysWithDates = selectedDays.map((day) => {
-        const targetDayNumber = weekDayMap[day];
-        const currentDate = new Date(startDate);
-        
-        while (currentDate <= endDate) {
-          if (currentDate.getDay() === targetDayNumber) {
-            return { day, date: new Date(currentDate) };
-          }
-          currentDate.setDate(currentDate.getDate() + 1);
-        }
-        
-        // Se não encontrar a data, retorna com data muito alta para ir pro final
-        return { day, date: new Date("9999-12-31") };
-      });
-
-      // Ordenar por data
-      daysWithDates.sort((a, b) => a.date.getTime() - b.date.getTime());
-
-      return daysWithDates.map(d => d.day);
-    } catch {
-      return selectedDays;
-    }
   };
 
   const getVenueDayActivity = (venueId: string, day: WeekDay) => {
@@ -1067,7 +987,7 @@ export default function Venues() {
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                         Tipo de Atividade por Dia
                       </p>
-                      {getSortedDays().map((day) => {
+                      {selectedDays.map((day) => {
                         const venueDayActivity = getVenueDayActivity(
                           venue.id,
                           day,
@@ -1078,7 +998,7 @@ export default function Venues() {
                             className="flex items-center justify-between gap-3 p-2 rounded-lg bg-muted/30"
                           >
                             <span className="text-sm font-medium">
-                              {getDayWithDate(day)}
+                              {WEEKDAY_SHORT_LABELS[day]}
                             </span>
                             <Select
                               value={
@@ -1127,7 +1047,20 @@ export default function Venues() {
                     Código
                   </th>
                   <th className="text-left p-4 text-sm font-medium text-muted-foreground">
-                    Nome
+                    <div className="flex items-center gap-2">
+                      Nome
+                      <button
+                        onClick={() => {
+                          setSortDirection((prev) =>
+                            prev === "asc" ? "desc" : "asc",
+                          );
+                        }}
+                        className="p-1 hover:bg-hacktown-cyan/20 rounded transition-colors"
+                        title={`Ordenar por nome (${sortDirection === "asc" ? "A-Z" : "Z-A"})`}
+                      >
+                        <ArrowUpDown className="h-4 w-4 text-hacktown-cyan" />
+                      </button>
+                    </div>
                   </th>
                   <th className="text-left p-4 text-sm font-medium text-muted-foreground">
                     Local
@@ -1206,10 +1139,7 @@ export default function Venues() {
                             {slotCount} slot(s)
                           </Badge>
                         </td>
-                        <td
-                          className="p-4"
-                          onClick={(e) => e.stopPropagation()}
-                        >
+                        <td className="p-4" onClick={(e) => e.stopPropagation()}>
                           <div className="flex gap-1 justify-end">
                             <Button
                               size="icon"
@@ -1260,7 +1190,7 @@ export default function Venues() {
                                 Tipo de Atividade por Dia
                               </p>
                               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                                {getSortedDays().map((day) => {
+                                {selectedDays.map((day) => {
                                   const venueDayActivity = getVenueDayActivity(
                                     venue.id,
                                     day,
@@ -1271,7 +1201,7 @@ export default function Venues() {
                                       className="flex items-center justify-between gap-2 p-2 rounded-lg bg-background/50"
                                     >
                                       <span className="text-sm font-medium">
-                                        {getDayWithDate(day)}
+                                        {WEEKDAY_SHORT_LABELS[day]}
                                       </span>
                                       <Select
                                         value={
