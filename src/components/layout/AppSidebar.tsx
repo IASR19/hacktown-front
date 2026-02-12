@@ -11,6 +11,7 @@ import {
   User,
   ChevronRight,
   Layers,
+  Wrench,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useNavigate } from "react-router-dom";
@@ -82,6 +83,12 @@ const menuItems = [
         url: "/venues",
         icon: MapPin,
         color: "text-hacktown-pink",
+      },
+      {
+        title: "Estrutura Necessária",
+        url: "/venue-infrastructure",
+        icon: Wrench,
+        color: "text-hacktown-cyan",
       },
     ],
   },

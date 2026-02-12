@@ -7,6 +7,7 @@ import {
   WeekDay,
   EventConfig,
   VenueDayActivity,
+  VenueInfrastructure,
 } from "@/types/hacktown";
 
 // Event Config Service
@@ -231,5 +232,38 @@ export const venueDayActivitiesService = {
       `/venue-day-activities/venue/${venueId}/day/${day}`,
       { activityType },
     );
+  },
+};
+
+// Venue Infrastructure Service
+export const venueInfrastructureService = {
+  async getAll(): Promise<VenueInfrastructure[]> {
+    return apiClient.get<VenueInfrastructure[]>("/venue-infrastructure");
+  },
+
+  async getByVenueId(venueId: string): Promise<VenueInfrastructure | null> {
+    return apiClient.get<VenueInfrastructure | null>(
+      `/venue-infrastructure/${venueId}`,
+    );
+  },
+
+  async create(
+    data: Omit<VenueInfrastructure, "id" | "venue">,
+  ): Promise<VenueInfrastructure> {
+    return apiClient.post<VenueInfrastructure>("/venue-infrastructure", data);
+  },
+
+  async update(
+    venueId: string,
+    data: Partial<Omit<VenueInfrastructure, "id" | "venueId" | "venue">>,
+  ): Promise<VenueInfrastructure> {
+    return apiClient.put<VenueInfrastructure>(
+      `/venue-infrastructure/${venueId}`,
+      data,
+    );
+  },
+
+  async delete(venueId: string): Promise<void> {
+    return apiClient.delete<void>(`/venue-infrastructure/${venueId}`);
   },
 };

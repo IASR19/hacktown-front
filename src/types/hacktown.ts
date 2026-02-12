@@ -140,3 +140,24 @@ export interface ComputedSlot {
 export interface VenueWithSlots extends Venue {
   slots: ComputedSlot[];
 }
+
+export interface VenueInfrastructure {
+  id: number;
+  venueId: string;
+  alvara: boolean;
+  alvaraProvidenciado: boolean;
+  avcb: boolean;
+  avcbProvidenciado: boolean;
+  revisao: boolean;
+  revisaoProvidenciada: boolean;
+  reforma: boolean;
+  reformaProvidenciada: boolean;
+  status?: string;
+  venue?: {
+    id: string;
+    code: string;
+    name: string;
+    nucleo?: string;
+    structureType?: string;
+  };
+}

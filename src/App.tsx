@@ -9,6 +9,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Dashboard from "@/pages/Dashboard";
 import Days from "@/pages/Days";
 import Venues from "@/pages/Venues";
+import VenueInfrastructure from "@/pages/VenueInfrastructure";
 import Slots from "@/pages/Slots";
 import CapacityManagement from "@/pages/CapacityManagement";
 import CapacityAnalysis from "@/pages/CapacityAnalysis";
@@ -69,6 +70,16 @@ const App = () => (
                   <PrivateRoute>
                     <AppLayout>
                       <Venues />
+                    </AppLayout>
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/venue-infrastructure"
+                element={
+                  <PrivateRoute>
+                    <AppLayout>
+                      <VenueInfrastructure />
                     </AppLayout>
                   </PrivateRoute>
                 }
