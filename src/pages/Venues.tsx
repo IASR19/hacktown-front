@@ -85,6 +85,9 @@ export default function Venues() {
     nucleo: "",
     structureType: "" as VenueStructureType | "",
   });
+  const [venueDayActivityTypes, setVenueDayActivityTypes] = useState<
+    Record<WeekDay, ActivityType>
+  >({} as Record<WeekDay, ActivityType>);
 
   // Filter and sort venues alphabetically
   const filteredVenues = useMemo(() => {
@@ -114,7 +117,13 @@ export default function Venues() {
       `📊 Total venues: ${venues.length}, Filtrados: ${filtered.length}, Query: "${query}", Núcleo: "${selectedNucleo}", Tipo: "${selectedStructureType}"`,
     );
     return filtered;
-  }, [venues, searchQuery, selectedNucleo, selectedStructureType, sortDirection]);
+  }, [
+    venues,
+    searchQuery,
+    selectedNucleo,
+    selectedStructureType,
+    sortDirection,
+  ]);
 
   // Obter núcleos únicos disponíveis
   const availableNucleos = useMemo(() => {
@@ -144,6 +153,7 @@ export default function Venues() {
       nucleo: "",
       structureType: "",
     });
+    setVenueDayActivityTypes({} as Record<WeekDay, ActivityType>);
     setEditingVenue(null);
   };
 
@@ -180,6 +190,18 @@ export default function Venues() {
       nucleo: venue.nucleo || "",
       structureType: venue.structureType || "",
     });
+
+    // Load existing venue day activity types
+    const dayActivityTypes: Record<WeekDay, ActivityType> = {} as Record<
+      WeekDay,
+      ActivityType
+    >;
+    selectedDays.forEach((day) => {
+      const vda = getVenueDayActivity(venue.id, day);
+      dayActivityTypes[day] = vda?.activityType || "palestra";
+    });
+    setVenueDayActivityTypes(dayActivityTypes);
+
     setIsOpen(true);
   };
 
@@ -203,6 +225,16 @@ export default function Venues() {
 
     if (editingVenue) {
       await updateVenue(editingVenue.id, venueData);
+
+      // Update venue day activities if editing
+      if (selectedDays.length > 0) {
+        const updatePromises = selectedDays.map((day) => {
+          const activityType = venueDayActivityTypes[day] || "palestra";
+          return updateVenueDayActivity(editingVenue.id, day, activityType);
+        });
+        await Promise.all(updatePromises);
+      }
+
       toast.success("Venue atualizado!");
     } else {
       await addVenue(venueData);
@@ -586,6 +618,51 @@ export default function Venues() {
                     className="bg-muted/50 border-border focus:border-hacktown-cyan"
                   />
                 </div>
+
+                {/* Tipo de Atividade por Dia - Only show when editing and there are selected days */}
+                {editingVenue && selectedDays.length > 0 && (
+                  <div className="space-y-3 pt-2 border-t border-border/50">
+                    <Label className="text-muted-foreground">
+                      Tipo de Atividade por Dia
+                    </Label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {selectedDays.map((day) => (
+                        <div
+                          key={day}
+                          className="flex items-center justify-between gap-2 p-3 rounded-lg bg-muted/30"
+                        >
+                          <span className="text-sm font-medium">
+                            {WEEKDAY_SHORT_LABELS[day]}
+                          </span>
+                          <Select
+                            value={venueDayActivityTypes[day] || "palestra"}
+                            onValueChange={(value) =>
+                              setVenueDayActivityTypes((prev) => ({
+                                ...prev,
+                                [day]: value as ActivityType,
+                              }))
+                            }
+                          >
+                            <SelectTrigger className="w-[140px] h-9 text-xs bg-background border-border">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="glass-strong border-border">
+                              {(
+                                Object.keys(
+                                  ACTIVITY_TYPE_LABELS,
+                                ) as ActivityType[]
+                              ).map((type) => (
+                                <SelectItem key={type} value={type}>
+                                  {ACTIVITY_TYPE_LABELS[type]}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex justify-end gap-3 pt-2">
                   <Button
@@ -1139,7 +1216,10 @@ export default function Venues() {
                             {slotCount} slot(s)
                           </Badge>
                         </td>
-                        <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                        <td
+                          className="p-4"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <div className="flex gap-1 justify-end">
                             <Button
                               size="icon"
