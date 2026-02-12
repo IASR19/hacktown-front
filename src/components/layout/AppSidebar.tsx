@@ -102,11 +102,11 @@ export function AppSidebar() {
     <Sidebar className="border-r border-sidebar-border/50 glass">
       <SidebarContent className="pt-6">
         <SidebarGroup>
-          <SidebarGroupLabel className="text-muted-foreground/70 uppercase text-xs tracking-widest mb-4 px-4">
+          <SidebarGroupLabel className="text-muted-foreground/70 uppercase text-xs tracking-widest mb-2 px-4">
             Menu
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu className="space-y-1 px-2">
+            <SidebarMenu className="space-y-0.5 px-2">
               {menuItems.map((item, index) => (
                 <SidebarMenuItem
                   key={item.title}
@@ -159,15 +159,15 @@ export function AppSidebar() {
                       </PopoverContent>
                     </Popover>
                   ) : (
-                    <SidebarMenuButton>
+                    <SidebarMenuButton asChild>
                       <NavLink
                         to={item.url}
                         end={item.url === "/dashboard"}
-                        className="flex items-center gap-3 px-4 py-3 rounded-xl text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-all duration-200 group"
+                        className="flex items-center gap-3 px-4 py-3 rounded-xl text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-all duration-200 group w-full"
                         activeClassName="bg-gradient-to-r from-hacktown-cyan/20 to-hacktown-pink/10 text-sidebar-foreground border border-hacktown-cyan/30 neon-glow"
                       >
                         <item.icon
-                          className={`h-5 w-5 ${item.color} group-hover:scale-110 transition-transform`}
+                          className={`h-5 w-5 flex-shrink-0 ${item.color} group-hover:scale-110 transition-transform`}
                         />
                         <span className="font-medium flex-1 text-left whitespace-nowrap">
                           {item.title}
