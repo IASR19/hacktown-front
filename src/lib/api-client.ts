@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
 export class ApiClient {
   private baseUrl: string;
@@ -9,20 +9,18 @@ export class ApiClient {
 
   private async request<T>(
     endpoint: string,
-    options?: RequestInit
+    options?: RequestInit,
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
-    
-    console.log(`🌐 API Request: ${options?.method || 'GET'} ${url}`);
-    
+
     // Obter token do localStorage
-    const token = localStorage.getItem('token');
-    
+    const token = localStorage.getItem("token");
+
     const config: RequestInit = {
       ...options,
       headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...options?.headers,
       },
     };
@@ -32,35 +30,35 @@ export class ApiClient {
 
       // Se receber 401, redirecionar para login
       if (response.status === 401) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
-        throw new Error('Sessão expirada. Faça login novamente.');
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        window.location.href = "/login";
+        throw new Error("Sessão expirada. Faça login novamente.");
       }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error(`❌ API Error: ${response.status}`, errorData);
         throw new Error(
-          errorData.message || `HTTP error! status: ${response.status}`
+          errorData.message || `HTTP error! status: ${response.status}`,
         );
       }
 
       // Handle 204 No Content or empty responses
-      if (response.status === 204 || response.headers.get('content-length') === '0') {
-        console.log(`✅ API Response: ${response.status} No Content`);
+      if (
+        response.status === 204 ||
+        response.headers.get("content-length") === "0"
+      ) {
         return undefined as T;
       }
 
       // Check if response has content
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        console.log(`✅ API Response: Non-JSON response`);
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
         return undefined as T;
       }
 
       const data = await response.json();
-      console.log(`✅ API Response:`, data);
       return data;
     } catch (error) {
       console.error(`❌ API request failed: ${url}`, error);
@@ -69,25 +67,25 @@ export class ApiClient {
   }
 
   async get<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, { method: 'GET' });
+    return this.request<T>(endpoint, { method: "GET" });
   }
 
   async post<T>(endpoint: string, data?: unknown): Promise<T> {
     return this.request<T>(endpoint, {
-      method: 'POST',
+      method: "POST",
       body: data ? JSON.stringify(data) : undefined,
     });
   }
 
   async put<T>(endpoint: string, data: unknown): Promise<T> {
     return this.request<T>(endpoint, {
-      method: 'PUT',
+      method: "PUT",
       body: JSON.stringify(data),
     });
   }
 
   async delete<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, { method: 'DELETE' });
+    return this.request<T>(endpoint, { method: "DELETE" });
   }
 }
 

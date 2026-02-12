@@ -263,6 +263,18 @@ export const venueInfrastructureService = {
     );
   },
 
+  async batchUpdate(
+    updates: Array<{
+      venueId: string;
+      data: Partial<Omit<VenueInfrastructure, "id" | "venueId" | "venue">>;
+    }>,
+  ): Promise<VenueInfrastructure[]> {
+    return apiClient.post<VenueInfrastructure[]>(
+      "/venue-infrastructure/batch",
+      { updates: updates.map((u) => ({ venueId: u.venueId, ...u.data })) },
+    );
+  },
+
   async delete(venueId: string): Promise<void> {
     return apiClient.delete<void>(`/venue-infrastructure/${venueId}`);
   },

@@ -105,7 +105,6 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
     if (!token) return;
 
     try {
-      console.log("🔄 Recarregando todos os dados...");
       const [
         venuesData,
         templatesData,
@@ -122,7 +121,6 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
       setSlotTemplates(templatesData);
       setDaySlotActivities(activitiesData);
       setVenueDayActivities(venueDayActivitiesData);
-      console.log("✅ Dados recarregados com sucesso");
     } catch (error) {
       console.error("❌ Erro ao recarregar dados:", error);
     }
@@ -139,7 +137,6 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        console.log("🔄 Carregando dados essenciais...");
         setIsLoading(true);
 
         // Carregar apenas dados essenciais primeiro (config e venues)
@@ -153,8 +150,6 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
         setEventStartDate(configData.startDate);
         setEventEndDate(configData.endDate);
 
-        console.log("✅ Dados essenciais carregados");
-
         // Carregar dados secundários em background (não bloqueia UI)
         Promise.all([
           slotTemplatesService.getAll(),
@@ -165,7 +160,6 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
             setSlotTemplates(templatesData);
             setDaySlotActivities(activitiesData);
             setVenueDayActivities(venueDayActivitiesData);
-            console.log("✅ Dados secundários carregados");
           })
           .catch((error) => {
             console.error("⚠️ Erro ao carregar dados secundários:", error);
@@ -186,7 +180,6 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
       const saveDays = async () => {
         try {
           await eventConfigService.updateConfig(selectedDays);
-          console.log("💾 Dias salvos no backend:", selectedDays);
         } catch (error) {
           console.error("❌ Erro ao salvar dias:", error);
         }
@@ -196,8 +189,6 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
   }, [selectedDays, isLoading]);
 
   const setSelectedDays = (days: WeekDay[]) => {
-    console.log("💾 Salvando dias selecionados:", days);
-
     // Sort days according to week order
     const sortedDays = [...days].sort(
       (a, b) => WEEKDAYS_ORDER.indexOf(a) - WEEKDAYS_ORDER.indexOf(b),
@@ -215,7 +206,6 @@ export function HacktownProvider({ children }: { children: ReactNode }) {
       setEventStartDate(startDate);
       setEventEndDate(endDate);
       await eventConfigService.updateConfig(selectedDays, startDate, endDate);
-      console.log("💾 Datas do evento salvas:", startDate, endDate);
     } catch (error) {
       console.error("❌ Erro ao salvar datas:", error);
     }

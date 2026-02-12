@@ -43,6 +43,9 @@ export default function VenueInfrastructurePage() {
   const [infrastructures, setInfrastructures] = useState<VenueInfrastructure[]>(
     [],
   );
+  const [originalInfrastructures, setOriginalInfrastructures] = useState<
+    VenueInfrastructure[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedNucleo, setSelectedNucleo] = useState<string>("todos");
@@ -55,6 +58,10 @@ export default function VenueInfrastructurePage() {
     type: "alvara" | "avcb" | "revisao" | "reforma";
     label: string;
   } | null>(null);
+  const [pendingChanges, setPendingChanges] = useState<
+    Map<string, Partial<VenueInfrastructure>>
+  >(new Map());
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     fetchInfrastructures();
@@ -64,6 +71,7 @@ export default function VenueInfrastructurePage() {
     try {
       const data = await venueInfrastructureService.getAll();
       setInfrastructures(data);
+      setOriginalInfrastructures(JSON.parse(JSON.stringify(data)));
     } catch (error) {
       console.error("Erro ao carregar infraestrutura:", error);
       toast.error("Erro ao carregar dados");
@@ -72,15 +80,45 @@ export default function VenueInfrastructurePage() {
     }
   };
 
-  const handleUpdate = async (
+  const handleUpdate = (
     venueId: string,
     field: keyof VenueInfrastructure,
     value: boolean | string,
   ) => {
+    const originalInfra = originalInfrastructures.find(
+      (i) => i.venueId === venueId,
+    );
     const updatedInfras = infrastructures.map((infra) =>
       infra.venueId === venueId ? { ...infra, [field]: value } : infra,
     );
     setInfrastructures(updatedInfras);
+
+    // Track pending changes
+    setPendingChanges((prev) => {
+      const newChanges = new Map(prev);
+      const existingChanges = newChanges.get(venueId) || {};
+
+      // Se o valor é igual ao original, remover do pendingChanges
+      if (originalInfra && originalInfra[field] === value) {
+        const updatedVenueChanges = { ...existingChanges };
+        delete updatedVenueChanges[field];
+
+        // Se não tem mais mudanças para este venue, remover do mapa
+        if (Object.keys(updatedVenueChanges).length === 0) {
+          newChanges.delete(venueId);
+        } else {
+          newChanges.set(venueId, updatedVenueChanges);
+        }
+      } else {
+        // Se é diferente do original, adicionar/atualizar
+        newChanges.set(venueId, {
+          ...existingChanges,
+          [field]: value,
+        });
+      }
+
+      return newChanges;
+    });
   };
 
   const handleSave = async (venueId: string) => {
@@ -102,6 +140,18 @@ export default function VenueInfrastructurePage() {
         status: infra.status || "",
       });
 
+      // Remove do pendingChanges após salvar
+      setPendingChanges((prev) => {
+        const newChanges = new Map(prev);
+        newChanges.delete(venueId);
+        return newChanges;
+      });
+
+      // Atualizar originalInfrastructures
+      setOriginalInfrastructures((prev) =>
+        prev.map((i) => (i.venueId === venueId ? { ...infra } : i)),
+      );
+
       toast.success("Salvo com sucesso!");
     } catch (error) {
       console.error("Erro ao salvar:", error);
@@ -115,7 +165,7 @@ export default function VenueInfrastructurePage() {
     }
   };
 
-  const handleToggleProvidenciado = async (
+  const handleToggleProvidenciado = (
     venueId: string,
     field:
       | "alvaraProvidenciado"
@@ -123,47 +173,96 @@ export default function VenueInfrastructurePage() {
       | "revisaoProvidenciada"
       | "reformaProvidenciada",
   ) => {
+    const originalInfra = originalInfrastructures.find(
+      (i) => i.venueId === venueId,
+    );
+    const infra = infrastructures.find((i) => i.venueId === venueId);
+    if (!infra) return;
+
+    const newValue = !infra[field];
+
+    // Update local state immediately
+    const updatedInfras = infrastructures.map((i) =>
+      i.venueId === venueId ? { ...i, [field]: newValue } : i,
+    );
+    setInfrastructures(updatedInfras);
+
+    // Track pending changes
+    setPendingChanges((prev) => {
+      const newChanges = new Map(prev);
+      const existingChanges = newChanges.get(venueId) || {};
+
+      // Se o valor é igual ao original, remover do pendingChanges
+      if (originalInfra && originalInfra[field] === newValue) {
+        const updatedVenueChanges = { ...existingChanges };
+        delete updatedVenueChanges[field];
+
+        // Se não tem mais mudanças para este venue, remover do mapa
+        if (Object.keys(updatedVenueChanges).length === 0) {
+          newChanges.delete(venueId);
+        } else {
+          newChanges.set(venueId, updatedVenueChanges);
+        }
+      } else {
+        newChanges.set(venueId, {
+          ...existingChanges,
+          [field]: newValue,
+        });
+      }
+
+      return newChanges;
+    });
+  };
+
+  const handleBatchSave = async () => {
+    if (pendingChanges.size === 0) return;
+
+    setIsSaving(true);
     try {
-      const infra = infrastructures.find((i) => i.venueId === venueId);
-      if (!infra) return;
-
-      const newValue = !infra[field];
-
-      // Update local state immediately
-      const updatedInfras = infrastructures.map((i) =>
-        i.venueId === venueId ? { ...i, [field]: newValue } : i,
+      const updates = Array.from(pendingChanges.entries()).map(
+        ([venueId, changes]) => {
+          const infra = infrastructures.find((i) => i.venueId === venueId);
+          return {
+            venueId,
+            data: {
+              alvara: infra?.alvara ?? false,
+              avcb: infra?.avcb ?? false,
+              revisao: infra?.revisao ?? false,
+              reforma: infra?.reforma ?? false,
+              alvaraProvidenciado: infra?.alvaraProvidenciado ?? false,
+              avcbProvidenciado: infra?.avcbProvidenciado ?? false,
+              revisaoProvidenciada: infra?.revisaoProvidenciada ?? false,
+              reformaProvidenciada: infra?.reformaProvidenciada ?? false,
+              status: infra?.status ?? "",
+              ...changes,
+            },
+          };
+        },
       );
-      setInfrastructures(updatedInfras);
 
-      // Save to backend
-      await venueInfrastructureService.update(venueId, {
-        alvara: infra.alvara,
-        avcb: infra.avcb,
-        revisao: infra.revisao,
-        reforma: infra.reforma,
-        alvaraProvidenciado:
-          field === "alvaraProvidenciado"
-            ? newValue
-            : infra.alvaraProvidenciado,
-        avcbProvidenciado:
-          field === "avcbProvidenciado" ? newValue : infra.avcbProvidenciado,
-        revisaoProvidenciada:
-          field === "revisaoProvidenciada"
-            ? newValue
-            : infra.revisaoProvidenciada,
-        reformaProvidenciada:
-          field === "reformaProvidenciada"
-            ? newValue
-            : infra.reformaProvidenciada,
-        status: infra.status || "",
-      });
+      await venueInfrastructureService.batchUpdate(updates);
 
-      toast.success("Status atualizado!");
+      // Atualizar originalInfrastructures
+      setOriginalInfrastructures((prev) =>
+        prev.map((original) => {
+          const updated = infrastructures.find(
+            (i) => i.venueId === original.venueId,
+          );
+          return updated || original;
+        }),
+      );
+
+      setPendingChanges(new Map());
+      toast.success(
+        `${updates.length} ${updates.length === 1 ? "alteração salva" : "alterações salvas"} com sucesso!`,
+      );
     } catch (error) {
-      console.error("Erro ao atualizar:", error);
-      toast.error("Erro ao atualizar status");
-      // Revert on error
+      console.error("Erro ao salvar alterações:", error);
+      toast.error("Erro ao salvar alterações");
+      // Revert changes
       fetchInfrastructures();
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -402,6 +501,22 @@ export default function VenueInfrastructurePage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Batch Save Button */}
+      {pendingChanges.size > 0 && (
+        <div className="flex items-center justify-center">
+          <button
+            onClick={handleBatchSave}
+            disabled={isSaving}
+            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-hacktown-pink to-hacktown-cyan text-white font-semibold rounded-lg hover:opacity-90 transition-opacity shadow-lg animate-pulse disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Save className="h-5 w-5" />
+            {isSaving
+              ? "Salvando..."
+              : `Salvar ${pendingChanges.size} ${pendingChanges.size === 1 ? "Alteração" : "Alterações"}`}
+          </button>
+        </div>
+      )}
 
       {/* Table */}
       <Card className="glass border-sidebar-border/50">
