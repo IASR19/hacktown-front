@@ -10,6 +10,7 @@ import Dashboard from "@/pages/Dashboard";
 import Days from "@/pages/Days";
 import Venues from "@/pages/Venues";
 import VenueInfrastructure from "@/pages/VenueInfrastructure";
+import VenueAudiovisual from "@/pages/VenueAudiovisual";
 import Slots from "@/pages/Slots";
 import CapacityManagement from "@/pages/CapacityManagement";
 import CapacityAnalysis from "@/pages/CapacityAnalysis";
@@ -80,6 +81,16 @@ const App = () => (
                   <PrivateRoute>
                     <AppLayout>
                       <VenueInfrastructure />
+                    </AppLayout>
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/venue-audiovisual"
+                element={
+                  <PrivateRoute>
+                    <AppLayout>
+                      <VenueAudiovisual />
                     </AppLayout>
                   </PrivateRoute>
                 }

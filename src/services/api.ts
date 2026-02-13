@@ -8,6 +8,7 @@ import {
   EventConfig,
   VenueDayActivity,
   VenueInfrastructure,
+  VenueAudiovisual,
 } from "@/types/hacktown";
 
 // Event Config Service
@@ -277,5 +278,49 @@ export const venueInfrastructureService = {
 
   async delete(venueId: string): Promise<void> {
     return apiClient.delete<void>(`/venue-infrastructure/${venueId}`);
+  },
+};
+
+// Venue Audiovisual Service
+export const venueAudiovisualService = {
+  async getAll(): Promise<VenueAudiovisual[]> {
+    return apiClient.get<VenueAudiovisual[]>("/venue-audiovisual");
+  },
+
+  async getByVenueId(venueId: string): Promise<VenueAudiovisual | null> {
+    return apiClient.get<VenueAudiovisual | null>(
+      `/venue-audiovisual/${venueId}`,
+    );
+  },
+
+  async create(
+    data: Omit<VenueAudiovisual, "id" | "venue">,
+  ): Promise<VenueAudiovisual> {
+    return apiClient.post<VenueAudiovisual>("/venue-audiovisual", data);
+  },
+
+  async update(
+    venueId: string,
+    data: Partial<Omit<VenueAudiovisual, "id" | "venueId" | "venue">>,
+  ): Promise<VenueAudiovisual> {
+    return apiClient.put<VenueAudiovisual>(
+      `/venue-audiovisual/${venueId}`,
+      data,
+    );
+  },
+
+  async batchUpdate(
+    updates: Array<{
+      venueId: string;
+      data: Partial<Omit<VenueAudiovisual, "id" | "venueId" | "venue">>;
+    }>,
+  ): Promise<VenueAudiovisual[]> {
+    return apiClient.post<VenueAudiovisual[]>("/venue-audiovisual/batch", {
+      updates: updates.map((u) => ({ venueId: u.venueId, ...u.data })),
+    });
+  },
+
+  async delete(venueId: string): Promise<void> {
+    return apiClient.delete<void>(`/venue-audiovisual/${venueId}`);
   },
 };

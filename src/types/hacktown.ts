@@ -161,3 +161,28 @@ export interface VenueInfrastructure {
     structureType?: string;
   };
 }
+
+export interface VenueAudiovisual {
+  id: number;
+  venueId: string;
+  microfone: boolean;
+  microfoneProvidenciado: boolean;
+  projetor: boolean;
+  projetorProvidenciado: boolean;
+  caboHdmi: boolean;
+  caboHdmiProvidenciado: boolean;
+  passadorSlide: boolean;
+  passadorSlideProvidenciado: boolean;
+  caixaSom: boolean;
+  caixaSomProvidenciada: boolean;
+  tela: boolean;
+  telaProvidenciada: boolean;
+  status?: string;
+  venue?: {
+    id: string;
+    code: string;
+    name: string;
+    nucleo?: string;
+    structureType?: string;
+  };
+}

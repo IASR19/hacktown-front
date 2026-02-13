@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Layers,
   Wrench,
+  Mic,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useNavigate } from "react-router-dom";
@@ -89,6 +90,12 @@ const menuItems = [
         url: "/venue-infrastructure",
         icon: Wrench,
         color: "text-hacktown-cyan",
+      },
+      {
+        title: "Audiovisual Necessário",
+        url: "/venue-audiovisual",
+        icon: Mic,
+        color: "text-hacktown-purple",
       },
     ],
   },
