@@ -168,7 +168,12 @@ export default function Slots() {
       return;
     }
 
-    const slotData: any = {
+    const slotData: {
+      venueId: string;
+      startTime: string;
+      endTime: string;
+      days: string[];
+    } = {
       venueId: formData.venueId,
       startTime: formData.startTime,
       endTime: formData.endTime,
