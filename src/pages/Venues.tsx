@@ -37,9 +37,11 @@ import {
   ChevronDown,
   ChevronUp,
   ArrowUpDown,
+  Navigation,
 } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
+import { MapModal } from "@/components/MapModal";
 import {
   Venue,
   VenueStructureType,
@@ -75,6 +77,7 @@ export default function Venues() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [expandedVenues, setExpandedVenues] = useState<Set<string>>(new Set());
+  const [mapModalVenue, setMapModalVenue] = useState<Venue | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     code: "",
@@ -1035,6 +1038,22 @@ export default function Venues() {
                     </div>
                   </div>
 
+                  {/* Checar Maps Button */}
+                  {venue.location && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMapModalVenue(venue);
+                      }}
+                      className="w-full border-hacktown-pink/30 hover:bg-hacktown-pink/20 hover:border-hacktown-pink/50 text-hacktown-pink"
+                    >
+                      <Navigation className="h-4 w-4 mr-2" />
+                      Checar Maps
+                    </Button>
+                  )}
+
                   {venue.nucleo && (
                     <p className="text-sm text-muted-foreground/80">
                       Núcleo: {venue.nucleo}
@@ -1196,6 +1215,20 @@ export default function Venues() {
                             <MapPin className="h-4 w-4 text-hacktown-pink flex-shrink-0" />
                             <span>{venue.location}</span>
                           </div>
+                          {venue.location && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMapModalVenue(venue);
+                              }}
+                              className="mt-1 h-6 px-2 text-xs text-hacktown-pink hover:bg-hacktown-pink/20"
+                            >
+                              <Navigation className="h-3 w-3 mr-1" />
+                              Checar Maps
+                            </Button>
+                          )}
                         </td>
                         <td className="p-4">
                           <span className="text-sm text-muted-foreground">
@@ -1326,6 +1359,16 @@ export default function Venues() {
             </table>
           </div>
         </Card>
+      )}
+
+      {/* Map Modal */}
+      {mapModalVenue && (
+        <MapModal
+          isOpen={!!mapModalVenue}
+          onClose={() => setMapModalVenue(null)}
+          venueName={mapModalVenue.name}
+          address={mapModalVenue.location || ""}
+        />
       )}
     </div>
   );
