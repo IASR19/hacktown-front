@@ -522,13 +522,14 @@ export default function TeamsPage() {
           : `${movingMember.volunteerName} movido para a equipe`,
       );
       await refreshTeamsData();
+      setShowMoveModal(false);
+      setMovingMember(null);
     } catch (error) {
       console.error("Erro ao mover membro:", error);
-      toast.error("Erro ao mover membro");
+      const errorMessage =
+        error instanceof Error ? error.message : "Erro ao mover membro";
+      toast.error(errorMessage);
     }
-
-    setShowMoveModal(false);
-    setMovingMember(null);
   };
 
   // Remove member from team
