@@ -151,6 +151,12 @@ export default function TeamsPage() {
   } | null>(null);
   const [targetTeamId, setTargetTeamId] = useState<string>("");
 
+  // Sync activeTab with URL on browser navigation (back/forward)
+  useEffect(() => {
+    const newTab = location.pathname === "/volunteers" ? "volunteers" : "teams";
+    setActiveTab(newTab);
+  }, [location.pathname]);
+
   useEffect(() => {
     fetchData();
   }, []);
