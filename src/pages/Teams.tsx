@@ -573,30 +573,18 @@ export default function TeamsPage() {
     if (!selectedMemberForAction || !targetTeamId) return;
 
     try {
-      if (memberActionType === "transfer") {
-        // Remove from current team
-        await teamsService.removeMember(
-          selectedMemberForAction.teamId,
-          selectedMemberForAction.volunteerId,
-        );
-        // Add to new team
-        await teamsService.addMember(
-          targetTeamId,
-          selectedMemberForAction.volunteerId,
-        );
-        toast.success(
-          `${selectedMemberForAction.volunteerName} transferido com sucesso`,
-        );
-      } else {
-        // Just add to new team (duplicate)
-        await teamsService.addMember(
-          targetTeamId,
-          selectedMemberForAction.volunteerId,
-        );
-        toast.success(
-          `${selectedMemberForAction.volunteerName} duplicado para outra equipe`,
-        );
-      }
+      // Use atomic moveMember operation with duplicate flag
+      await teamsService.moveMember(
+        selectedMemberForAction.volunteerId,
+        selectedMemberForAction.teamId,
+        targetTeamId,
+        memberActionType === "duplicate",
+      );
+      toast.success(
+        memberActionType === "transfer"
+          ? `${selectedMemberForAction.volunteerName} transferido com sucesso`
+          : `${selectedMemberForAction.volunteerName} duplicado para outra equipe`,
+      );
       await refreshTeamsData();
       setShowMemberActionModal(false);
       setSelectedMemberForAction(null);
@@ -614,59 +602,48 @@ export default function TeamsPage() {
     return slotTemplates.filter((s) => s.venueId === venueId);
   };
 
-  // Toggle venue slot selection
-  const toggleVenueSlot = (venueId: string, slotId: string) => {
-    setSelectedVenueSlots((prev) => {
-      const existing = prev.find((vs) => vs.venueId === venueId);
-      if (existing) {
-        const hasSlot = existing.slotTemplateIds.includes(slotId);
-        if (hasSlot) {
-          const newSlots = existing.slotTemplateIds.filter((s) => s !== slotId);
-          if (newSlots.length === 0) {
-            return prev.filter((vs) => vs.venueId !== venueId);
+  // Generic toggle venue slot function
+  const createToggleVenueSlot =
+    (
+      setter: React.Dispatch<
+        React.SetStateAction<{ venueId: string; slotTemplateIds: string[] }[]>
+      >,
+    ) =>
+    (venueId: string, slotId: string) => {
+      setter((prev) => {
+        const existing = prev.find((vs) => vs.venueId === venueId);
+        if (existing) {
+          const hasSlot = existing.slotTemplateIds.includes(slotId);
+          if (hasSlot) {
+            const newSlots = existing.slotTemplateIds.filter(
+              (s) => s !== slotId,
+            );
+            if (newSlots.length === 0) {
+              return prev.filter((vs) => vs.venueId !== venueId);
+            }
+            return prev.map((vs) =>
+              vs.venueId === venueId
+                ? { ...vs, slotTemplateIds: newSlots }
+                : vs,
+            );
+          } else {
+            return prev.map((vs) =>
+              vs.venueId === venueId
+                ? { ...vs, slotTemplateIds: [...vs.slotTemplateIds, slotId] }
+                : vs,
+            );
           }
-          return prev.map((vs) =>
-            vs.venueId === venueId ? { ...vs, slotTemplateIds: newSlots } : vs,
-          );
         } else {
-          return prev.map((vs) =>
-            vs.venueId === venueId
-              ? { ...vs, slotTemplateIds: [...vs.slotTemplateIds, slotId] }
-              : vs,
-          );
+          return [...prev, { venueId, slotTemplateIds: [slotId] }];
         }
-      } else {
-        return [...prev, { venueId, slotTemplateIds: [slotId] }];
-      }
-    });
-  };
+      });
+    };
+
+  // Toggle venue slot selection
+  const toggleVenueSlot = createToggleVenueSlot(setSelectedVenueSlots);
 
   // Toggle venue slot selection for editing
-  const toggleEditVenueSlot = (venueId: string, slotId: string) => {
-    setEditSelectedVenueSlots((prev) => {
-      const existing = prev.find((vs) => vs.venueId === venueId);
-      if (existing) {
-        const hasSlot = existing.slotTemplateIds.includes(slotId);
-        if (hasSlot) {
-          const newSlots = existing.slotTemplateIds.filter((s) => s !== slotId);
-          if (newSlots.length === 0) {
-            return prev.filter((vs) => vs.venueId !== venueId);
-          }
-          return prev.map((vs) =>
-            vs.venueId === venueId ? { ...vs, slotTemplateIds: newSlots } : vs,
-          );
-        } else {
-          return prev.map((vs) =>
-            vs.venueId === venueId
-              ? { ...vs, slotTemplateIds: [...vs.slotTemplateIds, slotId] }
-              : vs,
-          );
-        }
-      } else {
-        return [...prev, { venueId, slotTemplateIds: [slotId] }];
-      }
-    });
-  };
+  const toggleEditVenueSlot = createToggleVenueSlot(setEditSelectedVenueSlots);
 
   if (loading) {
     return (

@@ -260,8 +260,3 @@ export function parseTeamTypes(types: string): TeamType[] {
   if (!types) return [];
   return types.split(",").filter(Boolean) as TeamType[];
 }
-
-// Helper to format team types to comma-separated string
-export function formatTeamTypes(types: TeamType[]): string {
-  return types.join(",");
-}
