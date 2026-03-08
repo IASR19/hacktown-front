@@ -13,6 +13,7 @@ import {
   Layers,
   Wrench,
   Mic,
+  Users,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useNavigate } from "react-router-dom";
@@ -96,6 +97,19 @@ const menuItems = [
         url: "/venue-audiovisual",
         icon: Mic,
         color: "text-hacktown-purple",
+      },
+    ],
+  },
+  {
+    title: "Gestão de Equipes",
+    icon: Users,
+    color: "text-hacktown-green",
+    subItems: [
+      {
+        title: "Equipes Cadastradas",
+        url: "/teams",
+        icon: Users,
+        color: "text-hacktown-green",
       },
     ],
   },

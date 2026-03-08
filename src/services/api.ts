@@ -9,6 +9,12 @@ import {
   VenueDayActivity,
   VenueInfrastructure,
   VenueAudiovisual,
+  Volunteer,
+  VolunteerStatus,
+  Team,
+  TeamMember,
+  TeamVenueSlot,
+  TeamType,
 } from "@/types/hacktown";
 
 // Event Config Service
@@ -322,5 +328,126 @@ export const venueAudiovisualService = {
 
   async delete(venueId: string): Promise<void> {
     return apiClient.delete<void>(`/venue-audiovisual/${venueId}`);
+  },
+};
+
+// Volunteers Service
+export const volunteersService = {
+  async getAll(status?: VolunteerStatus): Promise<Volunteer[]> {
+    const query = status ? `?status=${status}` : "";
+    return apiClient.get<Volunteer[]>(`/volunteers${query}`);
+  },
+
+  async getApproved(): Promise<Volunteer[]> {
+    return apiClient.get<Volunteer[]>("/volunteers/approved");
+  },
+
+  async getById(id: string): Promise<Volunteer> {
+    return apiClient.get<Volunteer>(`/volunteers/${id}`);
+  },
+
+  async create(
+    data: Omit<Volunteer, "id" | "status" | "createdAt" | "updatedAt">,
+  ): Promise<Volunteer> {
+    return apiClient.post<Volunteer>("/volunteers", data);
+  },
+
+  async update(
+    id: string,
+    data: Partial<Omit<Volunteer, "id" | "createdAt" | "updatedAt">>,
+  ): Promise<Volunteer> {
+    return apiClient.put<Volunteer>(`/volunteers/${id}`, data);
+  },
+
+  async updateStatus(id: string, status: VolunteerStatus): Promise<Volunteer> {
+    return apiClient.patch<Volunteer>(`/volunteers/${id}/status`, { status });
+  },
+
+  async delete(id: string): Promise<void> {
+    return apiClient.delete<void>(`/volunteers/${id}`);
+  },
+};
+
+// Teams Service
+export const teamsService = {
+  async getAll(): Promise<Team[]> {
+    return apiClient.get<Team[]>("/teams");
+  },
+
+  async getById(id: string): Promise<Team> {
+    return apiClient.get<Team>(`/teams/${id}`);
+  },
+
+  async getUnassignedVolunteers(): Promise<Volunteer[]> {
+    return apiClient.get<Volunteer[]>("/teams/unassigned-volunteers");
+  },
+
+  async create(data: { name: string; types: TeamType[] }): Promise<Team> {
+    return apiClient.post<Team>("/teams", data);
+  },
+
+  async update(
+    id: string,
+    data: { name?: string; types?: TeamType[] },
+  ): Promise<Team> {
+    return apiClient.put<Team>(`/teams/${id}`, data);
+  },
+
+  async delete(id: string): Promise<void> {
+    return apiClient.delete<void>(`/teams/${id}`);
+  },
+
+  // Team Members
+  async addMember(teamId: string, volunteerId: string): Promise<TeamMember> {
+    return apiClient.post<TeamMember>(`/teams/${teamId}/members`, {
+      volunteerId,
+    });
+  },
+
+  async removeMember(teamId: string, volunteerId: string): Promise<void> {
+    return apiClient.delete<void>(`/teams/${teamId}/members/${volunteerId}`);
+  },
+
+  async moveMember(
+    volunteerId: string,
+    fromTeamId: string,
+    toTeamId: string,
+    duplicate: boolean,
+  ): Promise<{ added: TeamMember; removed: boolean }> {
+    return apiClient.post<{ added: TeamMember; removed: boolean }>(
+      "/teams/move-member",
+      { volunteerId, fromTeamId, toTeamId, duplicate },
+    );
+  },
+
+  // Team Venue Slots
+  async setVenueSlots(
+    teamId: string,
+    venueSlots: Array<{
+      venueId: string;
+      slotTemplateId?: string;
+      isDefaultVenue?: boolean;
+    }>,
+  ): Promise<TeamVenueSlot[]> {
+    return apiClient.post<TeamVenueSlot[]>(`/teams/${teamId}/venue-slots`, {
+      venueSlots,
+    });
+  },
+
+  async addVenueSlot(
+    teamId: string,
+    data: {
+      venueId: string;
+      slotTemplateId?: string;
+      isDefaultVenue?: boolean;
+    },
+  ): Promise<TeamVenueSlot> {
+    return apiClient.post<TeamVenueSlot>(`/teams/${teamId}/venue-slot`, data);
+  },
+
+  async removeVenueSlot(teamId: string, venueSlotId: string): Promise<void> {
+    return apiClient.delete<void>(
+      `/teams/${teamId}/venue-slots/${venueSlotId}`,
+    );
   },
 };
