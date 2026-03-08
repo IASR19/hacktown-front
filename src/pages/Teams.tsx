@@ -100,8 +100,13 @@ export default function TeamsPage() {
 
   // Assign volunteer modal (click to assign)
   const [showAssignModal, setShowAssignModal] = useState(false);
-  const [selectedVolunteerToAssign, setSelectedVolunteerToAssign] = useState<Volunteer | null>(null);
+  const [selectedVolunteerToAssign, setSelectedVolunteerToAssign] =
+    useState<Volunteer | null>(null);
   const [selectedTeamToAssign, setSelectedTeamToAssign] = useState<string>("");
+
+  // Filters for teams
+  const [filterVenue, setFilterVenue] = useState<string>("all");
+  const [filterTeamType, setFilterTeamType] = useState<string>("all");
 
   // Drag state
   const [draggedVolunteer, setDraggedVolunteer] = useState<Volunteer | null>(
@@ -161,6 +166,31 @@ export default function TeamsPage() {
       return matchesSearch;
     });
   }, [volunteers, searchQuery]);
+
+  // Filter teams by venue and type
+  const filteredTeams = useMemo(() => {
+    return teams.filter((team) => {
+      // Filter by team type
+      if (filterTeamType !== "all") {
+        const teamTypes = team.types ? team.types.split(",") : [];
+        if (!teamTypes.includes(filterTeamType)) {
+          return false;
+        }
+      }
+
+      // Filter by venue
+      if (filterVenue !== "all") {
+        const hasVenue = team.venueSlots?.some(
+          (vs) => vs.venue?.id === filterVenue,
+        );
+        if (!hasVenue) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [teams, filterVenue, filterTeamType]);
 
   // Handle volunteer approval
   const handleApproval = async (volunteerId: string, approved: boolean) => {
@@ -223,7 +253,8 @@ export default function TeamsPage() {
       await refreshTeamsData();
     } catch (error: unknown) {
       console.error("Erro ao criar equipe:", error);
-      const errorMessage = error instanceof Error ? error.message : "Erro ao criar equipe";
+      const errorMessage =
+        error instanceof Error ? error.message : "Erro ao criar equipe";
       toast.error(errorMessage);
     }
   };
@@ -307,15 +338,23 @@ export default function TeamsPage() {
     if (!selectedVolunteerToAssign || !selectedTeamToAssign) return;
 
     try {
-      await teamsService.addMember(selectedTeamToAssign, selectedVolunteerToAssign.id);
-      toast.success(`${selectedVolunteerToAssign.fullName} adicionado à equipe`);
+      await teamsService.addMember(
+        selectedTeamToAssign,
+        selectedVolunteerToAssign.id,
+      );
+      toast.success(
+        `${selectedVolunteerToAssign.fullName} adicionado à equipe`,
+      );
       await refreshTeamsData();
       setShowAssignModal(false);
       setSelectedVolunteerToAssign(null);
       setSelectedTeamToAssign("");
     } catch (error) {
       console.error("Erro ao adicionar membro:", error);
-      const errorMessage = error instanceof Error ? error.message : "Erro ao adicionar membro à equipe";
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Erro ao adicionar membro à equipe";
       toast.error(errorMessage);
     }
   };
@@ -540,7 +579,35 @@ export default function TeamsPage() {
 
         {/* Tab: Gestão de Equipes */}
         <TabsContent value="teams" className="space-y-4">
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <Select value={filterVenue} onValueChange={setFilterVenue}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Filtrar por venue" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os venues</SelectItem>
+                  {venues.map((venue) => (
+                    <SelectItem key={venue.id} value={venue.id}>
+                      {venue.code} - {venue.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={filterTeamType} onValueChange={setFilterTeamType}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Filtrar por tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os tipos</SelectItem>
+                  <SelectItem value="staff">Staff</SelectItem>
+                  <SelectItem value="credenciamento">Credenciamento</SelectItem>
+                  <SelectItem value="posso_ajudar">Posso Ajudar?</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <Button onClick={() => setShowCreateTeamModal(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Nova Equipe
@@ -587,18 +654,24 @@ export default function TeamsPage() {
 
             {/* Equipes */}
             <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {teams.length === 0 ? (
+              {filteredTeams.length === 0 ? (
                 <Card className="col-span-full">
                   <CardContent className="py-12 text-center text-muted-foreground">
                     <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>Nenhuma equipe criada ainda</p>
+                    <p>
+                      {teams.length === 0
+                        ? "Nenhuma equipe criada ainda"
+                        : "Nenhuma equipe encontrada com os filtros selecionados"}
+                    </p>
                     <p className="text-sm">
-                      Clique em "Nova Equipe" para começar
+                      {teams.length === 0
+                        ? 'Clique em "Nova Equipe" para começar'
+                        : "Tente alterar os filtros"}
                     </p>
                   </CardContent>
                 </Card>
               ) : (
-                teams.map((team) => (
+                filteredTeams.map((team) => (
                   <Card
                     key={team.id}
                     onDragOver={handleDragOver}
@@ -879,10 +952,14 @@ export default function TeamsPage() {
 
           <div className="space-y-4">
             <p className="text-muted-foreground">
-              Selecione a equipe para <strong>{selectedVolunteerToAssign?.fullName}</strong>:
+              Selecione a equipe para{" "}
+              <strong>{selectedVolunteerToAssign?.fullName}</strong>:
             </p>
 
-            <Select value={selectedTeamToAssign} onValueChange={setSelectedTeamToAssign}>
+            <Select
+              value={selectedTeamToAssign}
+              onValueChange={setSelectedTeamToAssign}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Selecione uma equipe" />
               </SelectTrigger>
@@ -900,7 +977,10 @@ export default function TeamsPage() {
             <Button variant="outline" onClick={() => setShowAssignModal(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleAssignConfirm} disabled={!selectedTeamToAssign}>
+            <Button
+              onClick={handleAssignConfirm}
+              disabled={!selectedTeamToAssign}
+            >
               Atribuir
             </Button>
           </DialogFooter>
