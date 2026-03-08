@@ -98,6 +98,11 @@ export default function TeamsPage() {
     toTeamId: string;
   } | null>(null);
 
+  // Assign volunteer modal (click to assign)
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [selectedVolunteerToAssign, setSelectedVolunteerToAssign] = useState<Volunteer | null>(null);
+  const [selectedTeamToAssign, setSelectedTeamToAssign] = useState<string>("");
+
   // Drag state
   const [draggedVolunteer, setDraggedVolunteer] = useState<Volunteer | null>(
     null,
@@ -285,6 +290,34 @@ export default function TeamsPage() {
 
     setDraggedVolunteer(null);
     setDragSource(null);
+  };
+
+  // Handle click to assign volunteer
+  const handleVolunteerClick = (volunteer: Volunteer) => {
+    if (teams.length === 0) {
+      toast.error("Crie uma equipe primeiro");
+      return;
+    }
+    setSelectedVolunteerToAssign(volunteer);
+    setSelectedTeamToAssign("");
+    setShowAssignModal(true);
+  };
+
+  const handleAssignConfirm = async () => {
+    if (!selectedVolunteerToAssign || !selectedTeamToAssign) return;
+
+    try {
+      await teamsService.addMember(selectedTeamToAssign, selectedVolunteerToAssign.id);
+      toast.success(`${selectedVolunteerToAssign.fullName} adicionado à equipe`);
+      await refreshTeamsData();
+      setShowAssignModal(false);
+      setSelectedVolunteerToAssign(null);
+      setSelectedTeamToAssign("");
+    } catch (error) {
+      console.error("Erro ao adicionar membro:", error);
+      const errorMessage = error instanceof Error ? error.message : "Erro ao adicionar membro à equipe";
+      toast.error(errorMessage);
+    }
   };
 
   const handleMoveConfirm = async (duplicate: boolean) => {
@@ -539,7 +572,8 @@ export default function TeamsPage() {
                       onDragStart={() =>
                         handleDragStart(volunteer, "unassigned")
                       }
-                      className="p-3 bg-muted rounded-lg cursor-move hover:bg-muted/80 transition-colors flex items-center gap-2"
+                      onClick={() => handleVolunteerClick(volunteer)}
+                      className="p-3 bg-muted rounded-lg cursor-pointer hover:bg-muted/80 transition-colors flex items-center gap-2"
                     >
                       <GripVertical className="h-4 w-4 text-muted-foreground" />
                       <span className="text-sm font-medium">
@@ -831,6 +865,43 @@ export default function TeamsPage() {
             </Button>
             <Button onClick={() => handleMoveConfirm(false)}>
               Substituir Equipe
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Atribuir Voluntário à Equipe */}
+      <Dialog open={showAssignModal} onOpenChange={setShowAssignModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Atribuir à Equipe</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <p className="text-muted-foreground">
+              Selecione a equipe para <strong>{selectedVolunteerToAssign?.fullName}</strong>:
+            </p>
+
+            <Select value={selectedTeamToAssign} onValueChange={setSelectedTeamToAssign}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione uma equipe" />
+              </SelectTrigger>
+              <SelectContent>
+                {teams.map((team) => (
+                  <SelectItem key={team.id} value={team.id}>
+                    {team.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowAssignModal(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleAssignConfirm} disabled={!selectedTeamToAssign}>
+              Atribuir
             </Button>
           </DialogFooter>
         </DialogContent>
