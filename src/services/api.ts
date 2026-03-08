@@ -420,6 +420,17 @@ export const teamsService = {
     );
   },
 
+  async setLeader(teamId: string, volunteerId: string): Promise<TeamMember> {
+    return apiClient.post<TeamMember>(
+      `/teams/${teamId}/leader/${volunteerId}`,
+      {},
+    );
+  },
+
+  async removeLeader(teamId: string): Promise<void> {
+    return apiClient.delete<void>(`/teams/${teamId}/leader`);
+  },
+
   // Team Venue Slots
   async setVenueSlots(
     teamId: string,

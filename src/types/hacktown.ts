@@ -237,6 +237,7 @@ export interface TeamMember {
   id: string;
   teamId: string;
   volunteerId: string;
+  isLeader: boolean;
   team?: Team;
   volunteer?: Volunteer;
   createdAt: string;
