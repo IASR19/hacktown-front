@@ -186,3 +186,77 @@ export interface VenueAudiovisual {
     structureType?: string;
   };
 }
+
+// ========== VOLUNTEERS & TEAMS ==========
+
+export type VolunteerStatus = "pending" | "approved" | "rejected";
+
+export const VOLUNTEER_STATUS_LABELS: Record<VolunteerStatus, string> = {
+  pending: "Pendente",
+  approved: "Aprovado",
+  rejected: "Rejeitado",
+};
+
+export interface Volunteer {
+  id: string;
+  fullName: string;
+  whatsapp: string;
+  email: string;
+  cpf: string;
+  city: string;
+  street: string;
+  neighborhood: string;
+  houseNumber: string;
+  complement?: string;
+  birthDate: string;
+  status: VolunteerStatus;
+  createdAt: string;
+  updatedAt: string;
+  teamMembers?: TeamMember[];
+}
+
+export type TeamType = "staff" | "credenciamento" | "posso_ajudar";
+
+export const TEAM_TYPE_LABELS: Record<TeamType, string> = {
+  staff: "Staff",
+  credenciamento: "Credenciamento",
+  posso_ajudar: "Posso Ajudar?",
+};
+
+export interface Team {
+  id: string;
+  name: string;
+  types: string; // Comma-separated TeamType values
+  createdAt: string;
+  updatedAt: string;
+  members?: TeamMember[];
+  venueSlots?: TeamVenueSlot[];
+}
+
+export interface TeamMember {
+  id: string;
+  teamId: string;
+  volunteerId: string;
+  isLeader: boolean;
+  team?: Team;
+  volunteer?: Volunteer;
+  createdAt: string;
+}
+
+export interface TeamVenueSlot {
+  id: string;
+  teamId: string;
+  venueId: string;
+  slotTemplateId?: string;
+  isDefaultVenue: boolean;
+  team?: Team;
+  venue?: Venue;
+  slotTemplate?: SlotTemplate;
+  createdAt: string;
+}
+
+// Helper to parse team types from comma-separated string
+export function parseTeamTypes(types: string): TeamType[] {
+  if (!types) return [];
+  return types.split(",").filter(Boolean) as TeamType[];
+}

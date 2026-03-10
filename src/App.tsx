@@ -14,6 +14,7 @@ import VenueAudiovisual from "@/pages/VenueAudiovisual";
 import Slots from "@/pages/Slots";
 import CapacityManagement from "@/pages/CapacityManagement";
 import CapacityAnalysis from "@/pages/CapacityAnalysis";
+import Teams from "@/pages/Teams";
 import Login from "@/pages/Login";
 import NotFound from "./pages/NotFound";
 
@@ -121,6 +122,26 @@ const App = () => (
                   <PrivateRoute>
                     <AppLayout>
                       <CapacityAnalysis />
+                    </AppLayout>
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/teams"
+                element={
+                  <PrivateRoute>
+                    <AppLayout>
+                      <Teams />
+                    </AppLayout>
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/volunteers"
+                element={
+                  <PrivateRoute>
+                    <AppLayout>
+                      <Teams />
                     </AppLayout>
                   </PrivateRoute>
                 }
