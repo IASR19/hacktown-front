@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -151,6 +151,12 @@ export default function TeamsPage() {
   } | null>(null);
   const [targetTeamId, setTargetTeamId] = useState<string>("");
 
+  // Partial availability state
+  const [showPartialAvailabilityModal, setShowPartialAvailabilityModal] =
+    useState(false);
+  const [selectedPartialVolunteer, setSelectedPartialVolunteer] =
+    useState<Volunteer | null>(null);
+
   // Sync activeTab with URL on browser navigation (back/forward)
   useEffect(() => {
     const newTab = location.pathname === "/volunteers" ? "volunteers" : "teams";
@@ -188,12 +194,14 @@ export default function TeamsPage() {
 
   const refreshTeamsData = async () => {
     try {
-      const [teamsData, unassignedData] = await Promise.all([
+      const [teamsData, unassignedData, volunteersData] = await Promise.all([
         teamsService.getAll(),
         teamsService.getUnassignedVolunteers(),
+        volunteersService.getAll(),
       ]);
       setTeams(teamsData);
       setUnassignedVolunteers(unassignedData);
+      setVolunteers(volunteersData);
     } catch (error) {
       console.error("Erro ao atualizar dados:", error);
     }
@@ -209,6 +217,153 @@ export default function TeamsPage() {
       return matchesSearch;
     });
   }, [volunteers, searchQuery]);
+
+  // Helper: Check if two time ranges conflict (memoized to avoid recreating on every render)
+  const timesConflict = useCallback(
+    (start1: string, end1: string, start2: string, end2: string): boolean => {
+      const toMinutes = (time: string) => {
+        const [h, m] = time.split(":").map(Number);
+        return h * 60 + m;
+      };
+      const s1 = toMinutes(start1);
+      const e1 = toMinutes(end1);
+      const s2 = toMinutes(start2);
+      const e2 = toMinutes(end2);
+      return !(e1 <= s2 || e2 <= s1);
+    },
+    [],
+  );
+
+  // Helper: Resolve effective slot times from a TeamVenueSlot
+  // If isDefaultVenue=true, returns ALL slots of that venue; otherwise the specific slot.
+  const resolveSlotTimes = useCallback(
+    (venueSlot: {
+      venueId: string;
+      slotTemplateId?: string;
+      isDefaultVenue: boolean;
+    }) =>
+      venueSlot.isDefaultVenue
+        ? slotTemplates
+            .filter((s) => s.venueId === venueSlot.venueId)
+            .map((s) => ({ startTime: s.startTime, endTime: s.endTime }))
+        : venueSlot.slotTemplateId
+          ? slotTemplates
+              .filter((s) => s.id === venueSlot.slotTemplateId)
+              .map((s) => ({ startTime: s.startTime, endTime: s.endTime }))
+          : [],
+    [slotTemplates],
+  );
+
+  // Helper: Get occupied slot times for a volunteer, optionally excluding a team
+  const getOccupiedTimes = useCallback(
+    (
+      volunteerId: string,
+      excludeTeamId?: string,
+    ): Array<{ startTime: string; endTime: string }> => {
+      const volunteer = volunteers.find((v) => v.id === volunteerId);
+      if (!volunteer) return [];
+      const occupied: Array<{ startTime: string; endTime: string }> = [];
+      volunteer.teamMembers?.forEach((member) => {
+        if (excludeTeamId && member.teamId === excludeTeamId) return;
+        const team = teams.find((t) => t.id === member.teamId);
+        team?.venueSlots?.forEach((slot) => {
+          resolveSlotTimes(slot).forEach((t) => occupied.push(t));
+        });
+      });
+      return occupied;
+    },
+    [volunteers, teams, resolveSlotTimes],
+  );
+
+  // Helper: Check if a volunteer's occupied times conflict with a target team's slots
+  const hasConflictWithTeam = useCallback(
+    (
+      occupiedTimes: Array<{ startTime: string; endTime: string }>,
+      targetTeamId: string,
+    ): boolean => {
+      const targetTeam = teams.find((t) => t.id === targetTeamId);
+      const targetSlots = (targetTeam?.venueSlots ?? []).flatMap((vs) =>
+        resolveSlotTimes(vs),
+      );
+
+      if (targetSlots.length === 0) return false;
+
+      return targetSlots.some((targetSlot) =>
+        occupiedTimes.some((occupied) =>
+          timesConflict(
+            occupied.startTime,
+            occupied.endTime,
+            targetSlot.startTime,
+            targetSlot.endTime,
+          ),
+        ),
+      );
+    },
+    [teams, resolveSlotTimes, timesConflict],
+  );
+
+  // Calculate volunteers with partial availability (assigned but with available non-conflicting slots)
+  const partiallyAssignedVolunteers = useMemo(() => {
+    return volunteers.filter((volunteer) => {
+      // Must have at least one team assignment
+      if (!volunteer.teamMembers || volunteer.teamMembers.length === 0) {
+        return false;
+      }
+
+      const occupiedTimes = getOccupiedTimes(volunteer.id);
+
+      // Check if there's any slot without time conflict
+      return slotTemplates.some((slot) => {
+        return !occupiedTimes.some((occupied) =>
+          timesConflict(
+            occupied.startTime,
+            occupied.endTime,
+            slot.startTime,
+            slot.endTime,
+          ),
+        );
+      });
+    });
+  }, [volunteers, slotTemplates, timesConflict, getOccupiedTimes]);
+
+  // Get occupied slots for a volunteer (for display in modal)
+  const getVolunteerOccupiedSlots = (volunteer: Volunteer) => {
+    const occupied: Array<{
+      teamName: string;
+      venueName: string;
+      slotTime?: string;
+    }> = [];
+
+    volunteer.teamMembers?.forEach((member) => {
+      const team = teams.find((t) => t.id === member.teamId);
+      if (team?.venueSlots) {
+        team.venueSlots.forEach((slot) => {
+          const venue = venues.find((v) => v.id === slot.venueId);
+          if (slot.isDefaultVenue) {
+            occupied.push({
+              teamName: team.name,
+              venueName: venue?.name || "Venue desconhecido",
+              slotTime: "Todos os horários (venue padrão)",
+            });
+          } else {
+            const slotTemplate = slot.slotTemplateId
+              ? slotTemplates.find((s) => s.id === slot.slotTemplateId)
+              : null;
+            const slotTime = slotTemplate
+              ? `${slotTemplate.startTime.substring(0, 5)} - ${slotTemplate.endTime.substring(0, 5)}`
+              : undefined;
+            occupied.push({
+              teamName: team.name,
+              venueName: venue?.name || "Venue desconhecido",
+              slotTime,
+            });
+          }
+        });
+      }
+    });
+
+    return occupied;
+  };
 
   // Filter teams by venue and type
   const filteredTeams = useMemo(() => {
@@ -446,6 +601,21 @@ export default function TeamsPage() {
         // Add to team from unassigned
         await teamsService.addMember(teamId, draggedVolunteer.id);
         toast.success(`${draggedVolunteer.fullName} adicionado à equipe`);
+      } else if (dragSource === "partial") {
+        // Check for time conflicts before adding from partial availability
+        const occupiedTimes = getOccupiedTimes(draggedVolunteer.id);
+        if (hasConflictWithTeam(occupiedTimes, teamId)) {
+          toast.error(
+            `${draggedVolunteer.fullName} já possui compromissos em horários conflitantes com esta equipe`,
+          );
+          setDraggedVolunteer(null);
+          setDragSource(null);
+          return;
+        }
+
+        // Add to team if no conflict
+        await teamsService.addMember(teamId, draggedVolunteer.id);
+        toast.success(`${draggedVolunteer.fullName} adicionado à equipe`);
       } else if (dragSource && dragSource !== teamId) {
         // Moving from another team - show modal
         setMovingMember({
@@ -484,6 +654,17 @@ export default function TeamsPage() {
   const handleAssignConfirm = async () => {
     if (!selectedVolunteerToAssign || !selectedTeamToAssign) return;
 
+    // Check for time conflicts if the volunteer already has team assignments
+    if (selectedVolunteerToAssign.teamMembers?.length) {
+      const occupiedTimes = getOccupiedTimes(selectedVolunteerToAssign.id);
+      if (hasConflictWithTeam(occupiedTimes, selectedTeamToAssign)) {
+        toast.error(
+          `${selectedVolunteerToAssign.fullName} já possui compromissos em horários conflitantes com a equipe selecionada`,
+        );
+        return;
+      }
+    }
+
     try {
       await teamsService.addMember(
         selectedTeamToAssign,
@@ -508,6 +689,19 @@ export default function TeamsPage() {
 
   const handleMoveConfirm = async (duplicate: boolean) => {
     if (!movingMember) return;
+
+    // For duplicate: check all occupied times. For transfer: exclude fromTeam (they'll leave it)
+    const occupiedTimes = getOccupiedTimes(
+      movingMember.volunteerId,
+      duplicate ? undefined : movingMember.fromTeamId,
+    );
+
+    if (hasConflictWithTeam(occupiedTimes, movingMember.toTeamId)) {
+      toast.error(
+        `${movingMember.volunteerName} já possui compromissos em horários conflitantes com a equipe de destino`,
+      );
+      return;
+    }
 
     try {
       await teamsService.moveMember(
@@ -579,18 +773,33 @@ export default function TeamsPage() {
   const handleMemberAction = async () => {
     if (!selectedMemberForAction || !targetTeamId) return;
 
+    const isDuplicate = memberActionType === "duplicate";
+
+    // For duplicate: check all occupied times. For transfer: exclude fromTeam (they'll leave it)
+    const occupiedTimes = getOccupiedTimes(
+      selectedMemberForAction.volunteerId,
+      isDuplicate ? undefined : selectedMemberForAction.teamId,
+    );
+
+    if (hasConflictWithTeam(occupiedTimes, targetTeamId)) {
+      toast.error(
+        `${selectedMemberForAction.volunteerName} já possui compromissos em horários conflitantes com a equipe selecionada`,
+      );
+      return;
+    }
+
     try {
       // Use atomic moveMember operation with duplicate flag
       await teamsService.moveMember(
         selectedMemberForAction.volunteerId,
         selectedMemberForAction.teamId,
         targetTeamId,
-        memberActionType === "duplicate",
+        isDuplicate,
       );
       toast.success(
-        memberActionType === "transfer"
-          ? `${selectedMemberForAction.volunteerName} transferido com sucesso`
-          : `${selectedMemberForAction.volunteerName} duplicado para outra equipe`,
+        isDuplicate
+          ? `${selectedMemberForAction.volunteerName} duplicado para outra equipe`
+          : `${selectedMemberForAction.volunteerName} transferido com sucesso`,
       );
       await refreshTeamsData();
       setShowMemberActionModal(false);
@@ -848,46 +1057,90 @@ export default function TeamsPage() {
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-            {/* Não Atribuídos */}
-            <Card className="lg:col-span-1" onDragOver={handleDragOver}>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <UserPlus className="h-5 w-5" />
-                  Não Atribuídos
-                  <Badge variant="secondary" className="ml-auto">
-                    {unassignedVolunteers.length}
-                  </Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 max-h-[500px] overflow-y-auto">
-                {unassignedVolunteers.length === 0 ? (
-                  <p className="text-muted-foreground text-sm text-center py-4">
-                    Todos os voluntários aprovados estão em equipes
-                  </p>
-                ) : (
-                  unassignedVolunteers.map((volunteer) => (
-                    <div
-                      key={volunteer.id}
-                      draggable
-                      onDragStart={() =>
-                        handleDragStart(volunteer, "unassigned")
-                      }
-                      onClick={() => handleVolunteerClick(volunteer)}
-                      className="p-3 bg-muted rounded-lg cursor-pointer hover:bg-muted/80 transition-colors flex items-center gap-2"
-                    >
-                      <GripVertical className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">
-                        {volunteer.fullName}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
+          <div className="flex flex-col gap-4">
+            {/* Faixa superior: Não Atribuídos + Disponibilidade Parcial */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Não Atribuídos */}
+              <Card className="" onDragOver={handleDragOver}>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <UserPlus className="h-5 w-5" />
+                    Não Atribuídos
+                    <Badge variant="secondary" className="ml-auto">
+                      {unassignedVolunteers.length}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 max-h-[500px] overflow-y-auto">
+                  {unassignedVolunteers.length === 0 ? (
+                    <p className="text-muted-foreground text-sm text-center py-4">
+                      Todos os voluntários aprovados estão em equipes
+                    </p>
+                  ) : (
+                    unassignedVolunteers.map((volunteer) => (
+                      <div
+                        key={volunteer.id}
+                        draggable
+                        onDragStart={() =>
+                          handleDragStart(volunteer, "unassigned")
+                        }
+                        onClick={() => handleVolunteerClick(volunteer)}
+                        className="p-3 bg-muted rounded-lg cursor-pointer hover:bg-muted/80 transition-colors flex items-center gap-2"
+                      >
+                        <GripVertical className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">
+                          {volunteer.fullName}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
 
-            {/* Equipes */}
-            <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {/* Disponibilidade Parcial */}
+              <Card className="lg:col-span-1" onDragOver={handleDragOver}>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Clock className="h-5 w-5" />
+                    Disponibilidade Parcial
+                    <Badge variant="secondary" className="ml-auto">
+                      {partiallyAssignedVolunteers.length}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 max-h-[500px] overflow-y-auto">
+                  {partiallyAssignedVolunteers.length === 0 ? (
+                    <p className="text-muted-foreground text-sm text-center py-4">
+                      Nenhum voluntário com disponibilidade parcial
+                    </p>
+                  ) : (
+                    partiallyAssignedVolunteers.map((volunteer) => (
+                      <div
+                        key={volunteer.id}
+                        draggable
+                        onDragStart={() =>
+                          handleDragStart(volunteer, "partial")
+                        }
+                        onClick={() => {
+                          setSelectedPartialVolunteer(volunteer);
+                          setShowPartialAvailabilityModal(true);
+                        }}
+                        className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg cursor-pointer hover:bg-amber-500/20 transition-colors flex items-center gap-2"
+                      >
+                        <Clock className="h-4 w-4 text-amber-600" />
+                        <span className="text-sm font-medium">
+                          {volunteer.fullName}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+            {/* fim grid faixa superior */}
+
+            {/* Equipes — quebra linha automaticamente, sem scroll horizontal */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {filteredTeams.length === 0 ? (
                 <Card className="col-span-full">
                   <CardContent className="py-12 text-center text-muted-foreground">
@@ -1285,6 +1538,80 @@ export default function TeamsPage() {
             </Button>
             <Button onClick={handleMemberAction} disabled={!targetTeamId}>
               {memberActionType === "transfer" ? "Transferir" : "Duplicar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Disponibilidade Parcial */}
+      <Dialog
+        open={showPartialAvailabilityModal}
+        onOpenChange={setShowPartialAvailabilityModal}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Disponibilidade Parcial: {selectedPartialVolunteer?.fullName}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
+              <p className="text-sm text-amber-900">
+                Este voluntário está alocado em algumas equipes/slots e pode ser
+                adicionado em outras.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="font-semibold text-sm">Slots já Ocupados:</h4>
+              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                {selectedPartialVolunteer &&
+                getVolunteerOccupiedSlots(selectedPartialVolunteer).length >
+                  0 ? (
+                  getVolunteerOccupiedSlots(selectedPartialVolunteer).map(
+                    (slot, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-start gap-2 p-2 bg-muted rounded"
+                      >
+                        <div className="flex-1 text-sm">
+                          <p className="font-medium">{slot.teamName}</p>
+                          <p className="text-muted-foreground text-xs">
+                            {slot.venueName}
+                            {slot.slotTime && ` • ${slot.slotTime}`}
+                          </p>
+                        </div>
+                      </div>
+                    ),
+                  )
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Nenhum slot encontrado
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowPartialAvailabilityModal(false)}
+            >
+              Fechar
+            </Button>
+            <Button
+              onClick={() => {
+                setShowPartialAvailabilityModal(false);
+                if (selectedPartialVolunteer) {
+                  setSelectedVolunteerToAssign(selectedPartialVolunteer);
+                  setSelectedTeamToAssign("");
+                  setShowAssignModal(true);
+                }
+              }}
+            >
+              Associar com equipe
             </Button>
           </DialogFooter>
         </DialogContent>
