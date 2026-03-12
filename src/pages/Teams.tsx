@@ -635,12 +635,10 @@ export default function TeamsPage() {
       )
         return;
       try {
-        await volunteersService.cancel(volunteerId);
+        const updatedVolunteer = await volunteersService.cancel(volunteerId);
         setVolunteers((prev) =>
           prev.map((v) =>
-            v.id === volunteerId
-              ? { ...v, status: "cancelled", teamMembers: [] }
-              : v,
+            v.id === volunteerId ? { ...v, ...updatedVolunteer } : v,
           ),
         );
         toast.success(`${volunteerName} cancelado e removido das equipes`);
@@ -654,9 +652,12 @@ export default function TeamsPage() {
 
   const handleSaveNotes = async (volunteerId: string, notes: string) => {
     try {
-      await volunteersService.updateNotes(volunteerId, notes);
+      const updatedVolunteer = await volunteersService.updateNotes(
+        volunteerId,
+        notes,
+      );
       setVolunteers((prev) =>
-        prev.map((v) => (v.id === volunteerId ? { ...v, notes } : v)),
+        prev.map((v) => (v.id === volunteerId ? updatedVolunteer : v)),
       );
     } catch (error) {
       console.error("Erro ao salvar observação:", error);
