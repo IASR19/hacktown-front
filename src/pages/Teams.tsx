@@ -588,8 +588,8 @@ export default function TeamsPage() {
     isLeaderOverride?: boolean,
   ) => {
     const isLeader =
-      isLeaderOverride ?? volunteers.find((v) => v.id === volunteerId)
-        ?.isLeader;
+      isLeaderOverride ??
+      volunteers.find((v) => v.id === volunteerId)?.isLeader;
     if (!isLeader) return;
     try {
       await teamsService.setLeader(teamId, volunteerId);
@@ -966,10 +966,7 @@ export default function TeamsPage() {
         movingMember.toTeamId,
         duplicate,
       );
-      await ensureLeaderOnTeam(
-        movingMember.volunteerId,
-        movingMember.toTeamId,
-      );
+      await ensureLeaderOnTeam(movingMember.volunteerId, movingMember.toTeamId);
       toast.success(
         duplicate
           ? `${movingMember.volunteerName} duplicado para a equipe`
