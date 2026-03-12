@@ -1055,10 +1055,16 @@ export default function TeamsPage() {
                               variant={
                                 volunteer.status === "approved"
                                   ? "default"
-                                  : volunteer.status === "rejected" ||
-                                      volunteer.status === "cancelled"
+                                  : volunteer.status === "rejected"
                                     ? "destructive"
-                                    : "secondary"
+                                    : volunteer.status === "cancelled"
+                                      ? "secondary"
+                                      : "secondary"
+                              }
+                              className={
+                                volunteer.status === "cancelled"
+                                  ? "bg-orange-500 text-white hover:bg-orange-600"
+                                  : undefined
                               }
                             >
                               {VOLUNTEER_STATUS_LABELS[volunteer.status]}
