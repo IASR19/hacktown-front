@@ -51,6 +51,7 @@ import {
   ArrowRightLeft,
   Copy,
   Ban,
+  RotateCcw,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -476,27 +477,53 @@ export default function TeamsPage() {
     }
   };
 
-  const handleCancel = async (volunteerId: string, volunteerName: string) => {
-    if (
-      !confirm(
-        `Cancelar ${volunteerName}? Ele será removido de todas as equipes imediatamente.`,
+  const handleCancel = async (
+    volunteerId: string,
+    volunteerName: string,
+    isCancelled: boolean,
+  ) => {
+    if (isCancelled) {
+      if (
+        !confirm(
+          `Reativar ${volunteerName}? O status voltará para Pendente e ele não será adicionado de volta às equipes automaticamente.`,
+        )
       )
-    )
-      return;
-    try {
-      await volunteersService.cancel(volunteerId);
-      setVolunteers((prev) =>
-        prev.map((v) =>
-          v.id === volunteerId
-            ? { ...v, status: "cancelled", teamMembers: [] }
-            : v,
-        ),
-      );
-      toast.success(`${volunteerName} cancelado e removido das equipes`);
-      await refreshTeamsData();
-    } catch (error) {
-      console.error("Erro ao cancelar voluntário:", error);
-      toast.error("Erro ao cancelar voluntário");
+        return;
+      try {
+        await volunteersService.reactivate(volunteerId);
+        setVolunteers((prev) =>
+          prev.map((v) =>
+            v.id === volunteerId ? { ...v, status: "pending" } : v,
+          ),
+        );
+        toast.success(`${volunteerName} reativado — status: Pendente`);
+        await refreshTeamsData();
+      } catch (error) {
+        console.error("Erro ao reativar voluntário:", error);
+        toast.error("Erro ao reativar voluntário");
+      }
+    } else {
+      if (
+        !confirm(
+          `Cancelar ${volunteerName}? Ele será removido de todas as equipes imediatamente.`,
+        )
+      )
+        return;
+      try {
+        await volunteersService.cancel(volunteerId);
+        setVolunteers((prev) =>
+          prev.map((v) =>
+            v.id === volunteerId
+              ? { ...v, status: "cancelled", teamMembers: [] }
+              : v,
+          ),
+        );
+        toast.success(`${volunteerName} cancelado e removido das equipes`);
+        await refreshTeamsData();
+      } catch (error) {
+        console.error("Erro ao cancelar voluntário:", error);
+        toast.error("Erro ao cancelar voluntário");
+      }
     }
   };
 
@@ -1105,14 +1132,29 @@ export default function TeamsPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 text-orange-600 hover:text-orange-700 hover:bg-orange-100"
-                                onClick={() =>
-                                  handleCancel(volunteer.id, volunteer.fullName)
+                                className={
+                                  volunteer.status === "cancelled"
+                                    ? "h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-100"
+                                    : "h-8 w-8 text-orange-600 hover:text-orange-700 hover:bg-orange-100"
                                 }
-                                disabled={volunteer.status === "cancelled"}
-                                title="Cancelar (remove das equipes)"
+                                onClick={() =>
+                                  handleCancel(
+                                    volunteer.id,
+                                    volunteer.fullName,
+                                    volunteer.status === "cancelled",
+                                  )
+                                }
+                                title={
+                                  volunteer.status === "cancelled"
+                                    ? "Reativar (volta para Pendente)"
+                                    : "Cancelar (remove das equipes)"
+                                }
                               >
-                                <Ban className="h-5 w-5" />
+                                {volunteer.status === "cancelled" ? (
+                                  <RotateCcw className="h-5 w-5" />
+                                ) : (
+                                  <Ban className="h-5 w-5" />
+                                )}
                               </Button>
                             </div>
                           </TableCell>
