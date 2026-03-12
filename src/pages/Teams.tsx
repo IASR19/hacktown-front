@@ -309,19 +309,53 @@ export default function TeamsPage() {
 
   // Dual scrollbar sync
   const tableScrollRef = React.useRef<HTMLDivElement>(null);
-  const topScrollRef = React.useRef<HTMLDivElement>(null);
   const tableContentRef = React.useRef<HTMLDivElement>(null);
+  const topBarTrackRef = React.useRef<HTMLDivElement>(null);
+  const topBarDragRef = React.useRef<{
+    startX: number;
+    startScrollLeft: number;
+  } | null>(null);
   const [tableScrollWidth, setTableScrollWidth] = React.useState(0);
+  const [topBarThumbWidth, setTopBarThumbWidth] = React.useState(100);
+  const [topBarThumbLeft, setTopBarThumbLeft] = React.useState(0);
+  const [canTopBarScroll, setCanTopBarScroll] = React.useState(false);
   const syncingRef = React.useRef(false);
+
+  const updateTopBarMetrics = React.useCallback(() => {
+    if (!tableScrollRef.current) return;
+
+    const containerWidth = tableScrollRef.current.clientWidth;
+    const contentWidth = tableScrollRef.current.scrollWidth;
+    const scrollLeft = tableScrollRef.current.scrollLeft;
+    const canScroll = contentWidth > containerWidth + 1;
+
+    setCanTopBarScroll(canScroll);
+
+    if (!canScroll) {
+      setTopBarThumbWidth(100);
+      setTopBarThumbLeft(0);
+      return;
+    }
+
+    const thumbWidth = Math.max((containerWidth / contentWidth) * 100, 12);
+    const maxScrollLeft = contentWidth - containerWidth;
+    const thumbRange = 100 - thumbWidth;
+    const thumbLeft =
+      maxScrollLeft > 0 ? (scrollLeft / maxScrollLeft) * thumbRange : 0;
+
+    setTopBarThumbWidth(thumbWidth);
+    setTopBarThumbLeft(thumbLeft);
+  }, []);
 
   React.useEffect(() => {
     const updateWidths = () => {
-      if (tableContentRef.current) {
-        setTableScrollWidth(tableContentRef.current.scrollWidth);
-      }
-      if (tableScrollRef.current && topScrollRef.current) {
-        topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
-      }
+      const contentWidth =
+        tableScrollRef.current?.scrollWidth ??
+        tableContentRef.current?.scrollWidth ??
+        0;
+
+      setTableScrollWidth(contentWidth);
+      updateTopBarMetrics();
     };
 
     updateWidths();
@@ -335,20 +369,77 @@ export default function TeamsPage() {
       observer.disconnect();
       window.removeEventListener("resize", updateWidths);
     };
-  }, [filteredVolunteers.length, activeTab]);
+  }, [filteredVolunteers.length, activeTab, updateTopBarMetrics]);
 
-  const handleTopScroll = () => {
-    if (syncingRef.current) return;
-    syncingRef.current = true;
-    if (tableScrollRef.current && topScrollRef.current)
-      tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
-    syncingRef.current = false;
+  React.useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (
+        !topBarDragRef.current ||
+        !tableScrollRef.current ||
+        !topBarTrackRef.current
+      ) {
+        return;
+      }
+
+      const dx = e.clientX - topBarDragRef.current.startX;
+      const trackWidth = topBarTrackRef.current.clientWidth;
+      const maxScrollLeft =
+        tableScrollRef.current.scrollWidth - tableScrollRef.current.clientWidth;
+
+      if (trackWidth <= 0 || maxScrollLeft <= 0) return;
+
+      const newScrollLeft =
+        topBarDragRef.current.startScrollLeft +
+        (dx / trackWidth) * maxScrollLeft;
+
+      tableScrollRef.current.scrollLeft = Math.max(
+        0,
+        Math.min(maxScrollLeft, newScrollLeft),
+      );
+      updateTopBarMetrics();
+    };
+
+    const handleMouseUp = () => {
+      topBarDragRef.current = null;
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [updateTopBarMetrics]);
+
+  const handleTopBarMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!canTopBarScroll || !tableScrollRef.current || !topBarTrackRef.current)
+      return;
+
+    const trackRect = topBarTrackRef.current.getBoundingClientRect();
+    const clickX = e.clientX - trackRect.left;
+    const maxScrollLeft =
+      tableScrollRef.current.scrollWidth - tableScrollRef.current.clientWidth;
+
+    if (maxScrollLeft <= 0 || trackRect.width <= 0) return;
+
+    const thumbCenterPct = clickX / trackRect.width;
+    tableScrollRef.current.scrollLeft = Math.max(
+      0,
+      Math.min(maxScrollLeft, thumbCenterPct * maxScrollLeft),
+    );
+    updateTopBarMetrics();
+
+    topBarDragRef.current = {
+      startX: e.clientX,
+      startScrollLeft: tableScrollRef.current.scrollLeft,
+    };
   };
+
   const handleBottomScroll = () => {
     if (syncingRef.current) return;
     syncingRef.current = true;
-    if (tableScrollRef.current && topScrollRef.current)
-      topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+    updateTopBarMetrics();
     syncingRef.current = false;
   };
 
@@ -1199,19 +1290,23 @@ export default function TeamsPage() {
             <CardContent>
               {/* Scrollbar superior sincronizada */}
               <div
-                ref={topScrollRef}
-                onScroll={handleTopScroll}
-                className="overflow-x-scroll mb-1"
-                style={{ height: 14 }}
+                ref={topBarTrackRef}
+                onMouseDown={handleTopBarMouseDown}
+                className="top-scrollbar themed-scrollbar mb-1"
               >
                 <div
-                  style={{ width: Math.max(tableScrollWidth, 1), height: 1 }}
+                  className="top-scrollbar-thumb"
+                  style={{
+                    width: `${topBarThumbWidth}%`,
+                    left: `${topBarThumbLeft}%`,
+                    opacity: canTopBarScroll ? 1 : 0.35,
+                  }}
                 />
               </div>
               <div
                 ref={tableScrollRef}
                 onScroll={handleBottomScroll}
-                className="rounded-md border overflow-x-auto"
+                className="rounded-md border overflow-x-auto themed-scrollbar"
               >
                 <div ref={tableContentRef} className="min-w-max">
                   <Table className="w-full">
