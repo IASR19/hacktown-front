@@ -363,6 +363,14 @@ export const volunteersService = {
     return apiClient.patch<Volunteer>(`/volunteers/${id}/status`, { status });
   },
 
+  async cancel(id: string): Promise<Volunteer> {
+    return apiClient.patch<Volunteer>(`/volunteers/${id}/cancel`, {});
+  },
+
+  async updateNotes(id: string, notes: string): Promise<Volunteer> {
+    return apiClient.patch<Volunteer>(`/volunteers/${id}/notes`, { notes });
+  },
+
   async delete(id: string): Promise<void> {
     return apiClient.delete<void>(`/volunteers/${id}`);
   },

@@ -50,7 +50,9 @@ import {
   Crown,
   ArrowRightLeft,
   Copy,
+  Ban,
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   Volunteer,
@@ -68,6 +70,56 @@ import {
   venuesService,
   slotTemplatesService,
 } from "@/services/api";
+
+// Inline editable notes cell
+function NotesCell({
+  value,
+  onSave,
+}: {
+  value: string;
+  onSave: (notes: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  const commit = () => {
+    setEditing(false);
+    if (draft !== value) onSave(draft);
+  };
+
+  if (editing) {
+    return (
+      <Textarea
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            setDraft(value);
+            setEditing(false);
+          }
+        }}
+        className="min-h-[60px] text-xs"
+        placeholder="Adicionar observação..."
+      />
+    );
+  }
+
+  return (
+    <div
+      onClick={() => {
+        setDraft(value);
+        setEditing(true);
+      }}
+      className="cursor-pointer text-xs text-muted-foreground hover:text-foreground min-h-[32px] rounded px-1 py-1 hover:bg-muted/50 transition-colors"
+    >
+      {value || (
+        <span className="italic opacity-50">Clique para adicionar...</span>
+      )}
+    </div>
+  );
+}
 
 export default function TeamsPage() {
   const location = useLocation();
@@ -421,6 +473,42 @@ export default function TeamsPage() {
     } catch (error) {
       console.error("Erro ao atualizar status:", error);
       toast.error("Erro ao atualizar status");
+    }
+  };
+
+  const handleCancel = async (volunteerId: string, volunteerName: string) => {
+    if (
+      !confirm(
+        `Cancelar ${volunteerName}? Ele será removido de todas as equipes imediatamente.`,
+      )
+    )
+      return;
+    try {
+      await volunteersService.cancel(volunteerId);
+      setVolunteers((prev) =>
+        prev.map((v) =>
+          v.id === volunteerId
+            ? { ...v, status: "cancelled", teamMembers: [] }
+            : v,
+        ),
+      );
+      toast.success(`${volunteerName} cancelado e removido das equipes`);
+      await refreshTeamsData();
+    } catch (error) {
+      console.error("Erro ao cancelar voluntário:", error);
+      toast.error("Erro ao cancelar voluntário");
+    }
+  };
+
+  const handleSaveNotes = async (volunteerId: string, notes: string) => {
+    try {
+      await volunteersService.updateNotes(volunteerId, notes);
+      setVolunteers((prev) =>
+        prev.map((v) => (v.id === volunteerId ? { ...v, notes } : v)),
+      );
+    } catch (error) {
+      console.error("Erro ao salvar observação:", error);
+      toast.error("Erro ao salvar observação");
     }
   };
 
@@ -927,14 +1015,15 @@ export default function TeamsPage() {
                       <TableHead>Endereço</TableHead>
                       <TableHead>Data Nasc.</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead className="text-center">Aprovar?</TableHead>
+                      <TableHead className="text-center">Ações</TableHead>
+                      <TableHead>Obs</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredVolunteers.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={9}
+                          colSpan={10}
                           className="text-center py-8 text-muted-foreground"
                         >
                           Nenhum voluntário encontrado
@@ -966,7 +1055,8 @@ export default function TeamsPage() {
                               variant={
                                 volunteer.status === "approved"
                                   ? "default"
-                                  : volunteer.status === "rejected"
+                                  : volunteer.status === "rejected" ||
+                                      volunteer.status === "cancelled"
                                     ? "destructive"
                                     : "secondary"
                               }
@@ -975,7 +1065,7 @@ export default function TeamsPage() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            <div className="flex items-center justify-center gap-2">
+                            <div className="flex items-center justify-center gap-1">
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -983,7 +1073,11 @@ export default function TeamsPage() {
                                 onClick={() =>
                                   handleApproval(volunteer.id, true)
                                 }
-                                disabled={volunteer.status === "approved"}
+                                disabled={
+                                  volunteer.status === "approved" ||
+                                  volunteer.status === "cancelled"
+                                }
+                                title="Aprovar"
                               >
                                 <Check className="h-5 w-5" />
                               </Button>
@@ -994,11 +1088,35 @@ export default function TeamsPage() {
                                 onClick={() =>
                                   handleApproval(volunteer.id, false)
                                 }
-                                disabled={volunteer.status === "rejected"}
+                                disabled={
+                                  volunteer.status === "rejected" ||
+                                  volunteer.status === "cancelled"
+                                }
+                                title="Rejeitar"
                               >
                                 <X className="h-5 w-5" />
                               </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-orange-600 hover:text-orange-700 hover:bg-orange-100"
+                                onClick={() =>
+                                  handleCancel(volunteer.id, volunteer.fullName)
+                                }
+                                disabled={volunteer.status === "cancelled"}
+                                title="Cancelar (remove das equipes)"
+                              >
+                                <Ban className="h-5 w-5" />
+                              </Button>
                             </div>
+                          </TableCell>
+                          <TableCell className="min-w-[160px]">
+                            <NotesCell
+                              value={volunteer.notes ?? ""}
+                              onSave={(notes) =>
+                                handleSaveNotes(volunteer.id, notes)
+                              }
+                            />
                           </TableCell>
                         </TableRow>
                       ))
