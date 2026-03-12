@@ -375,6 +375,10 @@ export const volunteersService = {
     return apiClient.patch<Volunteer>(`/volunteers/${id}/notes`, { notes });
   },
 
+  async updateLeader(id: string, isLeader: boolean): Promise<Volunteer> {
+    return apiClient.patch<Volunteer>(`/volunteers/${id}/leader`, { isLeader });
+  },
+
   async delete(id: string): Promise<void> {
     return apiClient.delete<void>(`/volunteers/${id}`);
   },
@@ -394,13 +398,17 @@ export const teamsService = {
     return apiClient.get<Volunteer[]>("/teams/unassigned-volunteers");
   },
 
-  async create(data: { name: string; types: TeamType[] }): Promise<Team> {
+  async create(data: {
+    name: string;
+    types: TeamType[];
+    notes?: string;
+  }): Promise<Team> {
     return apiClient.post<Team>("/teams", data);
   },
 
   async update(
     id: string,
-    data: { name?: string; types?: TeamType[] },
+    data: { name?: string; types?: TeamType[]; notes?: string },
   ): Promise<Team> {
     return apiClient.put<Team>(`/teams/${id}`, data);
   },
@@ -436,6 +444,17 @@ export const teamsService = {
     return apiClient.post<TeamMember>(
       `/teams/${teamId}/leader/${volunteerId}`,
       {},
+    );
+  },
+
+  async setLeaderStatus(
+    teamId: string,
+    volunteerId: string,
+    isLeader: boolean,
+  ): Promise<TeamMember | void> {
+    return apiClient.patch<TeamMember | void>(
+      `/teams/${teamId}/leader/${volunteerId}`,
+      { isLeader },
     );
   },
 

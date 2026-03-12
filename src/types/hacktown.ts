@@ -212,6 +212,7 @@ export interface Volunteer {
   birthDate: string;
   status: VolunteerStatus;
   notes?: string;
+  isLeader?: boolean;
   createdAt: string;
   updatedAt: string;
   teamMembers?: TeamMember[];
@@ -229,6 +230,7 @@ export interface Team {
   id: string;
   name: string;
   types: string; // Comma-separated TeamType values
+  notes?: string;
   createdAt: string;
   updatedAt: string;
   members?: TeamMember[];

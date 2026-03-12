@@ -174,6 +174,7 @@ export default function TeamsPage() {
   // Team creation modal
   const [showCreateTeamModal, setShowCreateTeamModal] = useState(false);
   const [newTeamName, setNewTeamName] = useState("");
+  const [newTeamNotes, setNewTeamNotes] = useState("");
   const [newTeamTypes, setNewTeamTypes] = useState<TeamType[]>([]);
   const [venueMode, setVenueMode] = useState<"default" | "by-slot">("default");
   const [selectedDefaultVenue, setSelectedDefaultVenue] = useState<string>("");
@@ -205,6 +206,7 @@ export default function TeamsPage() {
   const [showEditTeamModal, setShowEditTeamModal] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [editTeamName, setEditTeamName] = useState("");
+  const [editTeamNotes, setEditTeamNotes] = useState("");
   const [editTeamTypes, setEditTeamTypes] = useState<TeamType[]>([]);
   const [editVenueMode, setEditVenueMode] = useState<"default" | "by-slot">(
     "default",
@@ -296,7 +298,11 @@ export default function TeamsPage() {
         v.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         v.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
         v.cpf.includes(searchQuery);
-      const matchesStatus = statusFilter === "all" || v.status === statusFilter;
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "leader"
+          ? Boolean(v.isLeader)
+          : v.status === statusFilter);
       return matchesSearch && matchesStatus;
     });
   }, [volunteers, searchQuery, statusFilter]);
@@ -552,6 +558,46 @@ export default function TeamsPage() {
     }
   };
 
+  const handleToggleVolunteerLeader = async (volunteer: Volunteer) => {
+    try {
+      const updated = await volunteersService.updateLeader(
+        volunteer.id,
+        !volunteer.isLeader,
+      );
+      setVolunteers((prev) =>
+        prev.map((v) => (v.id === volunteer.id ? updated : v)),
+      );
+      setUnassignedVolunteers((prev) =>
+        prev.map((v) => (v.id === volunteer.id ? { ...v, ...updated } : v)),
+      );
+      toast.success(
+        updated.isLeader
+          ? `${volunteer.fullName} marcado como líder`
+          : `${volunteer.fullName} removido como líder`,
+      );
+      await refreshTeamsData();
+    } catch (error) {
+      console.error("Erro ao atualizar líder do voluntário:", error);
+      toast.error("Erro ao atualizar líder do voluntário");
+    }
+  };
+
+  const ensureLeaderOnTeam = async (
+    volunteerId: string,
+    teamId: string,
+    isLeaderOverride?: boolean,
+  ) => {
+    const isLeader =
+      isLeaderOverride ?? volunteers.find((v) => v.id === volunteerId)
+        ?.isLeader;
+    if (!isLeader) return;
+    try {
+      await teamsService.setLeader(teamId, volunteerId);
+    } catch (error) {
+      console.error("Erro ao definir líder automaticamente:", error);
+    }
+  };
+
   const handleCancel = async (
     volunteerId: string,
     volunteerName: string,
@@ -629,6 +675,7 @@ export default function TeamsPage() {
       const team = await teamsService.create({
         name: newTeamName,
         types: newTeamTypes,
+        notes: newTeamNotes.trim() ? newTeamNotes : undefined,
       });
 
       // Set venue slots based on mode
@@ -661,6 +708,7 @@ export default function TeamsPage() {
 
   const resetTeamForm = () => {
     setNewTeamName("");
+    setNewTeamNotes("");
     setNewTeamTypes([]);
     setVenueMode("default");
     setSelectedDefaultVenue("");
@@ -671,6 +719,7 @@ export default function TeamsPage() {
   const handleEditTeam = (team: Team) => {
     setEditingTeam(team);
     setEditTeamName(team.name);
+    setEditTeamNotes(team.notes ?? "");
     setEditTeamTypes(parseTeamTypes(team.types));
 
     // Determine venue mode and populate data
@@ -723,6 +772,7 @@ export default function TeamsPage() {
       await teamsService.update(editingTeam.id, {
         name: editTeamName,
         types: editTeamTypes,
+        notes: editTeamNotes.trim() ? editTeamNotes : "",
       });
 
       // Update venue slots
@@ -750,6 +800,7 @@ export default function TeamsPage() {
       toast.success("Equipe atualizada com sucesso!");
       setShowEditTeamModal(false);
       setEditingTeam(null);
+      setEditTeamNotes("");
       await refreshTeamsData();
     } catch (error: unknown) {
       console.error("Erro ao atualizar equipe:", error);
@@ -790,6 +841,11 @@ export default function TeamsPage() {
       if (dragSource === "unassigned") {
         // Add to team from unassigned
         await teamsService.addMember(teamId, draggedVolunteer.id);
+        await ensureLeaderOnTeam(
+          draggedVolunteer.id,
+          teamId,
+          draggedVolunteer.isLeader,
+        );
         toast.success(`${draggedVolunteer.fullName} adicionado à equipe`);
       } else if (dragSource === "partial") {
         // Check for time conflicts before adding from partial availability
@@ -805,6 +861,11 @@ export default function TeamsPage() {
 
         // Add to team if no conflict
         await teamsService.addMember(teamId, draggedVolunteer.id);
+        await ensureLeaderOnTeam(
+          draggedVolunteer.id,
+          teamId,
+          draggedVolunteer.isLeader,
+        );
         toast.success(`${draggedVolunteer.fullName} adicionado à equipe`);
       } else if (dragSource && dragSource !== teamId) {
         // Moving from another team - show modal
@@ -860,6 +921,11 @@ export default function TeamsPage() {
         selectedTeamToAssign,
         selectedVolunteerToAssign.id,
       );
+      await ensureLeaderOnTeam(
+        selectedVolunteerToAssign.id,
+        selectedTeamToAssign,
+        selectedVolunteerToAssign.isLeader,
+      );
       toast.success(
         `${selectedVolunteerToAssign.fullName} adicionado à equipe`,
       );
@@ -900,6 +966,10 @@ export default function TeamsPage() {
         movingMember.toTeamId,
         duplicate,
       );
+      await ensureLeaderOnTeam(
+        movingMember.volunteerId,
+        movingMember.toTeamId,
+      );
       toast.success(
         duplicate
           ? `${movingMember.volunteerName} duplicado para a equipe`
@@ -929,19 +999,24 @@ export default function TeamsPage() {
   };
 
   // Set member as leader
-  const handleSetLeader = async (
+  const handleToggleTeamLeader = async (
     teamId: string,
     volunteerId: string,
     volunteerName: string,
+    isLeader: boolean,
   ) => {
     try {
-      await teamsService.setLeader(teamId, volunteerId);
-      toast.success(`${volunteerName} definido como líder da equipe`);
+      await teamsService.setLeaderStatus(teamId, volunteerId, !isLeader);
+      toast.success(
+        !isLeader
+          ? `${volunteerName} definido como líder da equipe`
+          : `${volunteerName} removido da liderança da equipe`,
+      );
       await refreshTeamsData();
     } catch (error) {
-      console.error("Erro ao definir líder:", error);
+      console.error("Erro ao atualizar líder:", error);
       const errorMessage =
-        error instanceof Error ? error.message : "Erro ao definir líder";
+        error instanceof Error ? error.message : "Erro ao atualizar líder";
       toast.error(errorMessage);
     }
   };
@@ -1100,6 +1175,7 @@ export default function TeamsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="leader">Líderes</SelectItem>
                       <SelectItem value="pending">Pendente</SelectItem>
                       <SelectItem value="approved">Aprovado</SelectItem>
                       <SelectItem value="rejected">Rejeitado</SelectItem>
@@ -1126,7 +1202,9 @@ export default function TeamsPage() {
                 className="overflow-x-scroll mb-1"
                 style={{ height: 14 }}
               >
-                <div style={{ width: Math.max(tableScrollWidth, 1), height: 1 }} />
+                <div
+                  style={{ width: Math.max(tableScrollWidth, 1), height: 1 }}
+                />
               </div>
               <div
                 ref={tableScrollRef}
@@ -1134,145 +1212,180 @@ export default function TeamsPage() {
                 className="rounded-md border overflow-x-auto"
               >
                 <div ref={tableContentRef} className="min-w-max">
-                <Table className="w-full">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="min-w-[120px]">Nome</TableHead>
-                      <TableHead className="min-w-[110px]">WhatsApp</TableHead>
-                      <TableHead className="min-w-[150px]">E-mail</TableHead>
-                      <TableHead className="min-w-[90px]">Cidade</TableHead>
-                      <TableHead className="min-w-[90px]">Data Nasc.</TableHead>
-                      <TableHead className="min-w-[90px]">Status</TableHead>
-                      <TableHead className="min-w-[90px] text-center">
-                        Ações
-                      </TableHead>
-                      <TableHead className="min-w-[220px]">Obs</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredVolunteers.length === 0 ? (
+                  <Table className="w-full">
+                    <TableHeader>
                       <TableRow>
-                        <TableCell
-                          colSpan={8}
-                          className="text-center py-8 text-muted-foreground"
-                        >
-                          Nenhum voluntário encontrado
-                        </TableCell>
+                        <TableHead className="min-w-[120px]">Nome</TableHead>
+                        <TableHead className="min-w-[110px]">
+                          WhatsApp
+                        </TableHead>
+                        <TableHead className="min-w-[150px]">E-mail</TableHead>
+                        <TableHead className="min-w-[90px]">Cidade</TableHead>
+                        <TableHead className="min-w-[90px]">
+                          Data Nasc.
+                        </TableHead>
+                        <TableHead className="min-w-[90px]">Status</TableHead>
+                        <TableHead className="min-w-[90px] text-center">
+                          Ações
+                        </TableHead>
+                        <TableHead className="min-w-[220px]">Obs</TableHead>
                       </TableRow>
-                    ) : (
-                      filteredVolunteers.map((volunteer) => (
-                        <TableRow key={volunteer.id}>
-                          <TableCell className="font-medium whitespace-nowrap">
-                            {volunteer.fullName}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {volunteer.whatsapp}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {volunteer.email}
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">
-                            {volunteer.city}
-                          </TableCell>
-                          <TableCell>
-                            {new Date(volunteer.birthDate).toLocaleDateString(
-                              "pt-BR",
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={
-                                volunteer.status === "approved"
-                                  ? "default"
-                                  : volunteer.status === "rejected"
-                                    ? "destructive"
-                                    : volunteer.status === "cancelled"
-                                      ? "secondary"
-                                      : "secondary"
-                              }
-                              className={
-                                volunteer.status === "cancelled"
-                                  ? "bg-orange-500 text-white hover:bg-orange-600"
-                                  : undefined
-                              }
-                            >
-                              {VOLUNTEER_STATUS_LABELS[volunteer.status]}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center justify-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-100"
-                                onClick={() =>
-                                  handleApproval(volunteer.id, true)
-                                }
-                                disabled={
-                                  volunteer.status === "approved" ||
-                                  volunteer.status === "cancelled"
-                                }
-                                title="Aprovar"
-                              >
-                                <Check className="h-5 w-5" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-100"
-                                onClick={() =>
-                                  handleApproval(volunteer.id, false)
-                                }
-                                disabled={
-                                  volunteer.status === "rejected" ||
-                                  volunteer.status === "cancelled"
-                                }
-                                title="Rejeitar"
-                              >
-                                <X className="h-5 w-5" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className={
-                                  volunteer.status === "cancelled"
-                                    ? "h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-100"
-                                    : "h-8 w-8 text-orange-600 hover:text-orange-700 hover:bg-orange-100"
-                                }
-                                onClick={() =>
-                                  handleCancel(
-                                    volunteer.id,
-                                    volunteer.fullName,
-                                    volunteer.status === "cancelled",
-                                  )
-                                }
-                                title={
-                                  volunteer.status === "cancelled"
-                                    ? "Reativar (volta para Pendente)"
-                                    : "Cancelar (remove das equipes)"
-                                }
-                              >
-                                {volunteer.status === "cancelled" ? (
-                                  <RotateCcw className="h-5 w-5" />
-                                ) : (
-                                  <Ban className="h-5 w-5" />
-                                )}
-                              </Button>
-                            </div>
-                          </TableCell>
-                          <TableCell className="min-w-[220px]">
-                            <NotesCell
-                              value={volunteer.notes ?? ""}
-                              onSave={(notes) =>
-                                handleSaveNotes(volunteer.id, notes)
-                              }
-                            />
+                    </TableHeader>
+                    <TableBody>
+                      {filteredVolunteers.length === 0 ? (
+                        <TableRow>
+                          <TableCell
+                            colSpan={8}
+                            className="text-center py-8 text-muted-foreground"
+                          >
+                            Nenhum voluntário encontrado
                           </TableCell>
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
+                      ) : (
+                        filteredVolunteers.map((volunteer) => (
+                          <TableRow
+                            key={volunteer.id}
+                            className={
+                              volunteer.isLeader
+                                ? "bg-yellow-500/10 border-yellow-500/30"
+                                : undefined
+                            }
+                          >
+                            <TableCell className="font-medium whitespace-nowrap">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className="inline-flex items-center gap-2 hover:underline"
+                                  >
+                                    {volunteer.fullName}
+                                    {volunteer.isLeader && (
+                                      <Crown className="h-4 w-4 text-yellow-500" />
+                                    )}
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start">
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      handleToggleVolunteerLeader(volunteer)
+                                    }
+                                  >
+                                    <Crown className="h-4 w-4 mr-2 text-yellow-500" />
+                                    {volunteer.isLeader
+                                      ? "Remover status de líder"
+                                      : "Marcar como líder"}
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {volunteer.whatsapp}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {volunteer.email}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {volunteer.city}
+                            </TableCell>
+                            <TableCell>
+                              {new Date(volunteer.birthDate).toLocaleDateString(
+                                "pt-BR",
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={
+                                  volunteer.status === "approved"
+                                    ? "default"
+                                    : volunteer.status === "rejected"
+                                      ? "destructive"
+                                      : volunteer.status === "cancelled"
+                                        ? "secondary"
+                                        : "secondary"
+                                }
+                                className={
+                                  volunteer.status === "cancelled"
+                                    ? "bg-orange-500 text-white hover:bg-orange-600"
+                                    : undefined
+                                }
+                              >
+                                {VOLUNTEER_STATUS_LABELS[volunteer.status]}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center justify-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-100"
+                                  onClick={() =>
+                                    handleApproval(volunteer.id, true)
+                                  }
+                                  disabled={
+                                    volunteer.status === "approved" ||
+                                    volunteer.status === "cancelled"
+                                  }
+                                  title="Aprovar"
+                                >
+                                  <Check className="h-5 w-5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-100"
+                                  onClick={() =>
+                                    handleApproval(volunteer.id, false)
+                                  }
+                                  disabled={
+                                    volunteer.status === "rejected" ||
+                                    volunteer.status === "cancelled"
+                                  }
+                                  title="Rejeitar"
+                                >
+                                  <X className="h-5 w-5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className={
+                                    volunteer.status === "cancelled"
+                                      ? "h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-100"
+                                      : "h-8 w-8 text-orange-600 hover:text-orange-700 hover:bg-orange-100"
+                                  }
+                                  onClick={() =>
+                                    handleCancel(
+                                      volunteer.id,
+                                      volunteer.fullName,
+                                      volunteer.status === "cancelled",
+                                    )
+                                  }
+                                  title={
+                                    volunteer.status === "cancelled"
+                                      ? "Reativar (volta para Pendente)"
+                                      : "Cancelar (remove das equipes)"
+                                  }
+                                >
+                                  {volunteer.status === "cancelled" ? (
+                                    <RotateCcw className="h-5 w-5" />
+                                  ) : (
+                                    <Ban className="h-5 w-5" />
+                                  )}
+                                </Button>
+                              </div>
+                            </TableCell>
+                            <TableCell className="min-w-[220px]">
+                              <NotesCell
+                                value={volunteer.notes ?? ""}
+                                onSave={(notes) =>
+                                  handleSaveNotes(volunteer.id, notes)
+                                }
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
             </CardContent>
@@ -1360,6 +1473,9 @@ export default function TeamsPage() {
                         <span className="text-sm font-medium">
                           {volunteer.fullName}
                         </span>
+                        {volunteer.isLeader && (
+                          <Crown className="h-4 w-4 text-yellow-500" />
+                        )}
                       </div>
                     ))
                   )}
@@ -1400,6 +1516,9 @@ export default function TeamsPage() {
                         <span className="text-sm font-medium">
                           {volunteer.fullName}
                         </span>
+                        {volunteer.isLeader && (
+                          <Crown className="h-4 w-4 text-yellow-500" />
+                        )}
                       </div>
                     ))
                   )}
@@ -1533,21 +1652,22 @@ export default function TeamsPage() {
                                     </span>
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="start">
-                                    {!member.isLeader && (
-                                      <DropdownMenuItem
-                                        onClick={() =>
-                                          member.volunteer &&
-                                          handleSetLeader(
-                                            team.id,
-                                            member.volunteerId,
-                                            member.volunteer.fullName,
-                                          )
-                                        }
-                                      >
-                                        <Crown className="h-4 w-4 mr-2 text-yellow-500" />
-                                        Nomear como líder
-                                      </DropdownMenuItem>
-                                    )}
+                                    <DropdownMenuItem
+                                      onClick={() =>
+                                        member.volunteer &&
+                                        handleToggleTeamLeader(
+                                          team.id,
+                                          member.volunteerId,
+                                          member.volunteer.fullName,
+                                          member.isLeader,
+                                        )
+                                      }
+                                    >
+                                      <Crown className="h-4 w-4 mr-2 text-yellow-500" />
+                                      {member.isLeader
+                                        ? "Remover liderança"
+                                        : "Nomear como líder"}
+                                    </DropdownMenuItem>
                                     <DropdownMenuItem
                                       onClick={() =>
                                         member.volunteer &&
@@ -1620,6 +1740,17 @@ export default function TeamsPage() {
                 value={newTeamName}
                 onChange={(e) => setNewTeamName(e.target.value)}
                 placeholder="Digite o nome da equipe"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="teamNotes">Observação</Label>
+              <Textarea
+                id="teamNotes"
+                value={newTeamNotes}
+                onChange={(e) => setNewTeamNotes(e.target.value)}
+                placeholder="Adicione observações sobre a equipe"
+                className="min-h-[80px]"
               />
             </div>
 
@@ -1905,6 +2036,17 @@ export default function TeamsPage() {
             </div>
 
             <div>
+              <Label htmlFor="editTeamNotes">Observação</Label>
+              <Textarea
+                id="editTeamNotes"
+                value={editTeamNotes}
+                onChange={(e) => setEditTeamNotes(e.target.value)}
+                placeholder="Adicione observações sobre a equipe"
+                className="min-h-[80px]"
+              />
+            </div>
+
+            <div>
               <Label>Tipo(s) de Equipe</Label>
               <div className="flex gap-4 mt-2">
                 {(
@@ -2030,6 +2172,7 @@ export default function TeamsPage() {
               onClick={() => {
                 setShowEditTeamModal(false);
                 setEditingTeam(null);
+                setEditTeamNotes("");
               }}
             >
               Cancelar
