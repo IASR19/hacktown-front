@@ -83,27 +83,55 @@ function NotesCell({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
 
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
   const commit = () => {
     setEditing(false);
     if (draft !== value) onSave(draft);
   };
 
+  const cancelEdit = () => {
+    setDraft(value);
+    setEditing(false);
+  };
+
   if (editing) {
     return (
-      <Textarea
-        autoFocus
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") {
-            setDraft(value);
-            setEditing(false);
-          }
-        }}
-        className="min-h-[60px] text-xs"
-        placeholder="Adicionar observação..."
-      />
+      <div className="space-y-1">
+        <Textarea
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              cancelEdit();
+            }
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+              commit();
+            }
+          }}
+          className="min-h-[60px] text-xs"
+          placeholder="Adicionar observação..."
+        />
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            className="text-xs text-muted-foreground hover:text-foreground"
+            onClick={cancelEdit}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            className="text-xs font-medium text-hacktown-cyan hover:text-hacktown-cyan/80"
+            onClick={commit}
+          >
+            Salvar
+          </button>
+        </div>
+      </div>
     );
   }
 
@@ -113,7 +141,7 @@ function NotesCell({
         setDraft(value);
         setEditing(true);
       }}
-      className="cursor-pointer text-xs text-muted-foreground hover:text-foreground min-h-[32px] rounded px-1 py-1 hover:bg-muted/50 transition-colors"
+      className="cursor-pointer text-xs text-muted-foreground hover:text-foreground min-h-[32px] rounded px-1 py-1 hover:bg-muted/50 transition-colors whitespace-normal"
     >
       {value || (
         <span className="italic opacity-50">Clique para adicionar...</span>
@@ -133,6 +161,7 @@ export default function TeamsPage() {
   // Volunteers state
   const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   // Teams state
   const [teams, setTeams] = useState<Team[]>([]);
@@ -267,9 +296,55 @@ export default function TeamsPage() {
         v.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         v.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
         v.cpf.includes(searchQuery);
-      return matchesSearch;
+      const matchesStatus = statusFilter === "all" || v.status === statusFilter;
+      return matchesSearch && matchesStatus;
     });
-  }, [volunteers, searchQuery]);
+  }, [volunteers, searchQuery, statusFilter]);
+
+  // Dual scrollbar sync
+  const tableScrollRef = React.useRef<HTMLDivElement>(null);
+  const topScrollRef = React.useRef<HTMLDivElement>(null);
+  const tableContentRef = React.useRef<HTMLDivElement>(null);
+  const [tableScrollWidth, setTableScrollWidth] = React.useState(0);
+  const syncingRef = React.useRef(false);
+
+  React.useEffect(() => {
+    const updateWidths = () => {
+      if (tableContentRef.current) {
+        setTableScrollWidth(tableContentRef.current.scrollWidth);
+      }
+      if (tableScrollRef.current && topScrollRef.current) {
+        topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+      }
+    };
+
+    updateWidths();
+
+    const observer = new ResizeObserver(updateWidths);
+    if (tableContentRef.current) observer.observe(tableContentRef.current);
+    if (tableScrollRef.current) observer.observe(tableScrollRef.current);
+
+    window.addEventListener("resize", updateWidths);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateWidths);
+    };
+  }, [filteredVolunteers.length, activeTab]);
+
+  const handleTopScroll = () => {
+    if (syncingRef.current) return;
+    syncingRef.current = true;
+    if (tableScrollRef.current && topScrollRef.current)
+      tableScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+    syncingRef.current = false;
+  };
+  const handleBottomScroll = () => {
+    if (syncingRef.current) return;
+    syncingRef.current = true;
+    if (tableScrollRef.current && topScrollRef.current)
+      topScrollRef.current.scrollLeft = tableScrollRef.current.scrollLeft;
+    syncingRef.current = false;
+  };
 
   // Helper: Check if two time ranges conflict (memoized to avoid recreating on every render)
   const timesConflict = useCallback(
@@ -1018,39 +1093,67 @@ export default function TeamsPage() {
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
                 <span>Lista de Voluntários</span>
-                <div className="relative w-72">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                  <Input
-                    placeholder="Buscar por nome, email ou CPF..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10"
-                  />
+                <div className="flex items-center gap-2">
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-[160px]">
+                      <SelectValue placeholder="Filtrar por status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="pending">Pendente</SelectItem>
+                      <SelectItem value="approved">Aprovado</SelectItem>
+                      <SelectItem value="rejected">Rejeitado</SelectItem>
+                      <SelectItem value="cancelled">Cancelado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div className="relative w-72">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                    <Input
+                      placeholder="Buscar por nome, email ou CPF..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
                 </div>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="rounded-md border">
-                <Table>
+              {/* Scrollbar superior sincronizada */}
+              <div
+                ref={topScrollRef}
+                onScroll={handleTopScroll}
+                className="overflow-x-scroll mb-1"
+                style={{ height: 14 }}
+              >
+                <div style={{ width: Math.max(tableScrollWidth, 1), height: 1 }} />
+              </div>
+              <div
+                ref={tableScrollRef}
+                onScroll={handleBottomScroll}
+                className="rounded-md border overflow-x-auto"
+              >
+                <div ref={tableContentRef} className="min-w-max">
+                <Table className="w-full">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Nome</TableHead>
-                      <TableHead>WhatsApp</TableHead>
-                      <TableHead>E-mail</TableHead>
-                      <TableHead>CPF</TableHead>
-                      <TableHead>Cidade</TableHead>
-                      <TableHead>Endereço</TableHead>
-                      <TableHead>Data Nasc.</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-center">Ações</TableHead>
-                      <TableHead>Obs</TableHead>
+                      <TableHead className="min-w-[120px]">Nome</TableHead>
+                      <TableHead className="min-w-[110px]">WhatsApp</TableHead>
+                      <TableHead className="min-w-[150px]">E-mail</TableHead>
+                      <TableHead className="min-w-[90px]">Cidade</TableHead>
+                      <TableHead className="min-w-[90px]">Data Nasc.</TableHead>
+                      <TableHead className="min-w-[90px]">Status</TableHead>
+                      <TableHead className="min-w-[90px] text-center">
+                        Ações
+                      </TableHead>
+                      <TableHead className="min-w-[220px]">Obs</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredVolunteers.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={10}
+                          colSpan={8}
                           className="text-center py-8 text-muted-foreground"
                         >
                           Nenhum voluntário encontrado
@@ -1059,18 +1162,17 @@ export default function TeamsPage() {
                     ) : (
                       filteredVolunteers.map((volunteer) => (
                         <TableRow key={volunteer.id}>
-                          <TableCell className="font-medium">
+                          <TableCell className="font-medium whitespace-nowrap">
                             {volunteer.fullName}
                           </TableCell>
-                          <TableCell>{volunteer.whatsapp}</TableCell>
-                          <TableCell>{volunteer.email}</TableCell>
-                          <TableCell>{volunteer.cpf}</TableCell>
-                          <TableCell>{volunteer.city}</TableCell>
-                          <TableCell>
-                            {volunteer.street}, {volunteer.houseNumber}
-                            {volunteer.complement &&
-                              ` - ${volunteer.complement}`}
-                            , {volunteer.neighborhood}
+                          <TableCell className="whitespace-nowrap">
+                            {volunteer.whatsapp}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {volunteer.email}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">
+                            {volunteer.city}
                           </TableCell>
                           <TableCell>
                             {new Date(volunteer.birthDate).toLocaleDateString(
@@ -1158,7 +1260,7 @@ export default function TeamsPage() {
                               </Button>
                             </div>
                           </TableCell>
-                          <TableCell className="min-w-[160px]">
+                          <TableCell className="min-w-[220px]">
                             <NotesCell
                               value={volunteer.notes ?? ""}
                               onSave={(notes) =>
@@ -1171,6 +1273,7 @@ export default function TeamsPage() {
                     )}
                   </TableBody>
                 </Table>
+                </div>
               </div>
             </CardContent>
           </Card>
