@@ -611,13 +611,17 @@ export default function TeamsPage() {
       )
         return;
       try {
-        await volunteersService.reactivate(volunteerId);
+        const updatedVolunteer =
+          await volunteersService.reactivate(volunteerId);
         setVolunteers((prev) =>
           prev.map((v) =>
-            v.id === volunteerId ? { ...v, status: "pending" } : v,
+            v.id === volunteerId ? { ...v, ...updatedVolunteer } : v,
           ),
         );
-        toast.success(`${volunteerName} reativado — status: Pendente`);
+        const statusLabel =
+          VOLUNTEER_STATUS_LABELS[updatedVolunteer.status] ??
+          updatedVolunteer.status;
+        toast.success(`${volunteerName} reativado — status: ${statusLabel}`);
         await refreshTeamsData();
       } catch (error) {
         console.error("Erro ao reativar voluntário:", error);
@@ -772,7 +776,7 @@ export default function TeamsPage() {
       await teamsService.update(editingTeam.id, {
         name: editTeamName,
         types: editTeamTypes,
-        notes: editTeamNotes.trim() ? editTeamNotes : "",
+        ...(editTeamNotes.trim() ? { notes: editTeamNotes } : {}),
       });
 
       // Update venue slots
@@ -1963,30 +1967,42 @@ export default function TeamsPage() {
             <div className="space-y-3">
               <h4 className="font-semibold text-sm">Slots já Ocupados:</h4>
               <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                {selectedPartialVolunteer &&
-                getVolunteerOccupiedSlots(selectedPartialVolunteer).length >
-                  0 ? (
-                  getVolunteerOccupiedSlots(selectedPartialVolunteer).map(
-                    (slot, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-start gap-2 p-2 bg-muted rounded"
-                      >
-                        <div className="flex-1 text-sm">
-                          <p className="font-medium">{slot.teamName}</p>
-                          <p className="text-muted-foreground text-xs">
-                            {slot.venueName}
-                            {slot.slotTime && ` • ${slot.slotTime}`}
-                          </p>
-                        </div>
+                {(() => {
+                  if (!selectedPartialVolunteer) {
+                    return (
+                      <p className="text-sm text-muted-foreground">
+                        Nenhum slot encontrado
+                      </p>
+                    );
+                  }
+
+                  const occupiedSlots = getVolunteerOccupiedSlots(
+                    selectedPartialVolunteer,
+                  );
+
+                  if (occupiedSlots.length === 0) {
+                    return (
+                      <p className="text-sm text-muted-foreground">
+                        Nenhum slot encontrado
+                      </p>
+                    );
+                  }
+
+                  return occupiedSlots.map((slot, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-start gap-2 p-2 bg-muted rounded"
+                    >
+                      <div className="flex-1 text-sm">
+                        <p className="font-medium">{slot.teamName}</p>
+                        <p className="text-muted-foreground text-xs">
+                          {slot.venueName}
+                          {slot.slotTime && ` • ${slot.slotTime}`}
+                        </p>
                       </div>
-                    ),
-                  )
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Nenhum slot encontrado
-                  </p>
-                )}
+                    </div>
+                  ));
+                })()}
               </div>
             </div>
           </div>
