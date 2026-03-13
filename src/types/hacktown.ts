@@ -189,12 +189,13 @@ export interface VenueAudiovisual {
 
 // ========== VOLUNTEERS & TEAMS ==========
 
-export type VolunteerStatus = "pending" | "approved" | "rejected";
+export type VolunteerStatus = "pending" | "approved" | "rejected" | "cancelled";
 
 export const VOLUNTEER_STATUS_LABELS: Record<VolunteerStatus, string> = {
   pending: "Pendente",
   approved: "Aprovado",
   rejected: "Rejeitado",
+  cancelled: "Cancelado",
 };
 
 export interface Volunteer {
@@ -210,6 +211,8 @@ export interface Volunteer {
   complement?: string;
   birthDate: string;
   status: VolunteerStatus;
+  notes?: string;
+  isLeader?: boolean;
   createdAt: string;
   updatedAt: string;
   teamMembers?: TeamMember[];
@@ -227,6 +230,7 @@ export interface Team {
   id: string;
   name: string;
   types: string; // Comma-separated TeamType values
+  notes?: string;
   createdAt: string;
   updatedAt: string;
   members?: TeamMember[];

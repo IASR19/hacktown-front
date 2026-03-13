@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -50,7 +50,10 @@ import {
   Crown,
   ArrowRightLeft,
   Copy,
+  Ban,
+  RotateCcw,
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   Volunteer,
@@ -69,6 +72,84 @@ import {
   slotTemplatesService,
 } from "@/services/api";
 
+// Inline editable notes cell
+function NotesCell({
+  value,
+  onSave,
+}: {
+  value: string;
+  onSave: (notes: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  const commit = () => {
+    setEditing(false);
+    if (draft !== value) onSave(draft);
+  };
+
+  const cancelEdit = () => {
+    setDraft(value);
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div className="space-y-1">
+        <Textarea
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              cancelEdit();
+            }
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+              commit();
+            }
+          }}
+          className="min-h-[60px] text-xs"
+          placeholder="Adicionar observação..."
+        />
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            className="text-xs text-muted-foreground hover:text-foreground"
+            onClick={cancelEdit}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            className="text-xs font-medium text-hacktown-cyan hover:text-hacktown-cyan/80"
+            onClick={commit}
+          >
+            Salvar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      onClick={() => {
+        setDraft(value);
+        setEditing(true);
+      }}
+      className="cursor-pointer text-xs text-muted-foreground hover:text-foreground min-h-[32px] rounded px-1 py-1 hover:bg-muted/50 transition-colors whitespace-normal"
+    >
+      {value || (
+        <span className="italic opacity-50">Clique para adicionar...</span>
+      )}
+    </div>
+  );
+}
+
 export default function TeamsPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -80,6 +161,7 @@ export default function TeamsPage() {
   // Volunteers state
   const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   // Teams state
   const [teams, setTeams] = useState<Team[]>([]);
@@ -92,6 +174,7 @@ export default function TeamsPage() {
   // Team creation modal
   const [showCreateTeamModal, setShowCreateTeamModal] = useState(false);
   const [newTeamName, setNewTeamName] = useState("");
+  const [newTeamNotes, setNewTeamNotes] = useState("");
   const [newTeamTypes, setNewTeamTypes] = useState<TeamType[]>([]);
   const [venueMode, setVenueMode] = useState<"default" | "by-slot">("default");
   const [selectedDefaultVenue, setSelectedDefaultVenue] = useState<string>("");
@@ -123,6 +206,7 @@ export default function TeamsPage() {
   const [showEditTeamModal, setShowEditTeamModal] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [editTeamName, setEditTeamName] = useState("");
+  const [editTeamNotes, setEditTeamNotes] = useState("");
   const [editTeamTypes, setEditTeamTypes] = useState<TeamType[]>([]);
   const [editVenueMode, setEditVenueMode] = useState<"default" | "by-slot">(
     "default",
@@ -150,6 +234,12 @@ export default function TeamsPage() {
     volunteerName: string;
   } | null>(null);
   const [targetTeamId, setTargetTeamId] = useState<string>("");
+
+  // Partial availability state
+  const [showPartialAvailabilityModal, setShowPartialAvailabilityModal] =
+    useState(false);
+  const [selectedPartialVolunteer, setSelectedPartialVolunteer] =
+    useState<Volunteer | null>(null);
 
   // Sync activeTab with URL on browser navigation (back/forward)
   useEffect(() => {
@@ -188,12 +278,14 @@ export default function TeamsPage() {
 
   const refreshTeamsData = async () => {
     try {
-      const [teamsData, unassignedData] = await Promise.all([
+      const [teamsData, unassignedData, volunteersData] = await Promise.all([
         teamsService.getAll(),
         teamsService.getUnassignedVolunteers(),
+        volunteersService.getAll(),
       ]);
       setTeams(teamsData);
       setUnassignedVolunteers(unassignedData);
+      setVolunteers(volunteersData);
     } catch (error) {
       console.error("Erro ao atualizar dados:", error);
     }
@@ -206,9 +298,297 @@ export default function TeamsPage() {
         v.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         v.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
         v.cpf.includes(searchQuery);
-      return matchesSearch;
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "leader"
+          ? Boolean(v.isLeader)
+          : v.status === statusFilter);
+      return matchesSearch && matchesStatus;
     });
-  }, [volunteers, searchQuery]);
+  }, [volunteers, searchQuery, statusFilter]);
+
+  // Dual scrollbar sync
+  const tableScrollRef = React.useRef<HTMLDivElement>(null);
+  const tableContentRef = React.useRef<HTMLDivElement>(null);
+  const topBarTrackRef = React.useRef<HTMLDivElement>(null);
+  const topBarDragRef = React.useRef<{
+    startX: number;
+    startScrollLeft: number;
+  } | null>(null);
+  const [tableScrollWidth, setTableScrollWidth] = React.useState(0);
+  const [topBarThumbWidth, setTopBarThumbWidth] = React.useState(100);
+  const [topBarThumbLeft, setTopBarThumbLeft] = React.useState(0);
+  const [canTopBarScroll, setCanTopBarScroll] = React.useState(false);
+  const syncingRef = React.useRef(false);
+
+  const updateTopBarMetrics = React.useCallback(() => {
+    if (!tableScrollRef.current) return;
+
+    const containerWidth = tableScrollRef.current.clientWidth;
+    const contentWidth = tableScrollRef.current.scrollWidth;
+    const scrollLeft = tableScrollRef.current.scrollLeft;
+    const canScroll = contentWidth > containerWidth + 1;
+
+    setCanTopBarScroll(canScroll);
+
+    if (!canScroll) {
+      setTopBarThumbWidth(100);
+      setTopBarThumbLeft(0);
+      return;
+    }
+
+    const thumbWidth = Math.max((containerWidth / contentWidth) * 100, 12);
+    const maxScrollLeft = contentWidth - containerWidth;
+    const thumbRange = 100 - thumbWidth;
+    const thumbLeft =
+      maxScrollLeft > 0 ? (scrollLeft / maxScrollLeft) * thumbRange : 0;
+
+    setTopBarThumbWidth(thumbWidth);
+    setTopBarThumbLeft(thumbLeft);
+  }, []);
+
+  React.useEffect(() => {
+    const updateWidths = () => {
+      const contentWidth =
+        tableScrollRef.current?.scrollWidth ??
+        tableContentRef.current?.scrollWidth ??
+        0;
+
+      setTableScrollWidth(contentWidth);
+      updateTopBarMetrics();
+    };
+
+    updateWidths();
+
+    const observer = new ResizeObserver(updateWidths);
+    if (tableContentRef.current) observer.observe(tableContentRef.current);
+    if (tableScrollRef.current) observer.observe(tableScrollRef.current);
+
+    window.addEventListener("resize", updateWidths);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateWidths);
+    };
+  }, [filteredVolunteers.length, activeTab, updateTopBarMetrics]);
+
+  React.useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (
+        !topBarDragRef.current ||
+        !tableScrollRef.current ||
+        !topBarTrackRef.current
+      ) {
+        return;
+      }
+
+      const dx = e.clientX - topBarDragRef.current.startX;
+      const trackWidth = topBarTrackRef.current.clientWidth;
+      const maxScrollLeft =
+        tableScrollRef.current.scrollWidth - tableScrollRef.current.clientWidth;
+
+      if (trackWidth <= 0 || maxScrollLeft <= 0) return;
+
+      const newScrollLeft =
+        topBarDragRef.current.startScrollLeft +
+        (dx / trackWidth) * maxScrollLeft;
+
+      tableScrollRef.current.scrollLeft = Math.max(
+        0,
+        Math.min(maxScrollLeft, newScrollLeft),
+      );
+      updateTopBarMetrics();
+    };
+
+    const handleMouseUp = () => {
+      topBarDragRef.current = null;
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [updateTopBarMetrics]);
+
+  const handleTopBarMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!canTopBarScroll || !tableScrollRef.current || !topBarTrackRef.current)
+      return;
+
+    const trackRect = topBarTrackRef.current.getBoundingClientRect();
+    const clickX = e.clientX - trackRect.left;
+    const maxScrollLeft =
+      tableScrollRef.current.scrollWidth - tableScrollRef.current.clientWidth;
+
+    if (maxScrollLeft <= 0 || trackRect.width <= 0) return;
+
+    const thumbCenterPct = clickX / trackRect.width;
+    tableScrollRef.current.scrollLeft = Math.max(
+      0,
+      Math.min(maxScrollLeft, thumbCenterPct * maxScrollLeft),
+    );
+    updateTopBarMetrics();
+
+    topBarDragRef.current = {
+      startX: e.clientX,
+      startScrollLeft: tableScrollRef.current.scrollLeft,
+    };
+  };
+
+  const handleBottomScroll = () => {
+    if (syncingRef.current) return;
+    syncingRef.current = true;
+    updateTopBarMetrics();
+    syncingRef.current = false;
+  };
+
+  // Helper: Check if two time ranges conflict (memoized to avoid recreating on every render)
+  const timesConflict = useCallback(
+    (start1: string, end1: string, start2: string, end2: string): boolean => {
+      const toMinutes = (time: string) => {
+        const [h, m] = time.split(":").map(Number);
+        return h * 60 + m;
+      };
+      const s1 = toMinutes(start1);
+      const e1 = toMinutes(end1);
+      const s2 = toMinutes(start2);
+      const e2 = toMinutes(end2);
+      return !(e1 <= s2 || e2 <= s1);
+    },
+    [],
+  );
+
+  // Helper: Resolve effective slot times from a TeamVenueSlot
+  // If isDefaultVenue=true, returns ALL slots of that venue; otherwise the specific slot.
+  const resolveSlotTimes = useCallback(
+    (venueSlot: {
+      venueId: string;
+      slotTemplateId?: string;
+      isDefaultVenue: boolean;
+    }) =>
+      venueSlot.isDefaultVenue
+        ? slotTemplates
+            .filter((s) => s.venueId === venueSlot.venueId)
+            .map((s) => ({ startTime: s.startTime, endTime: s.endTime }))
+        : venueSlot.slotTemplateId
+          ? slotTemplates
+              .filter((s) => s.id === venueSlot.slotTemplateId)
+              .map((s) => ({ startTime: s.startTime, endTime: s.endTime }))
+          : [],
+    [slotTemplates],
+  );
+
+  // Helper: Get occupied slot times for a volunteer, optionally excluding a team
+  const getOccupiedTimes = useCallback(
+    (
+      volunteerId: string,
+      excludeTeamId?: string,
+    ): Array<{ startTime: string; endTime: string }> => {
+      const volunteer = volunteers.find((v) => v.id === volunteerId);
+      if (!volunteer) return [];
+      const occupied: Array<{ startTime: string; endTime: string }> = [];
+      volunteer.teamMembers?.forEach((member) => {
+        if (excludeTeamId && member.teamId === excludeTeamId) return;
+        const team = teams.find((t) => t.id === member.teamId);
+        team?.venueSlots?.forEach((slot) => {
+          resolveSlotTimes(slot).forEach((t) => occupied.push(t));
+        });
+      });
+      return occupied;
+    },
+    [volunteers, teams, resolveSlotTimes],
+  );
+
+  // Helper: Check if a volunteer's occupied times conflict with a target team's slots
+  const hasConflictWithTeam = useCallback(
+    (
+      occupiedTimes: Array<{ startTime: string; endTime: string }>,
+      targetTeamId: string,
+    ): boolean => {
+      const targetTeam = teams.find((t) => t.id === targetTeamId);
+      const targetSlots = (targetTeam?.venueSlots ?? []).flatMap((vs) =>
+        resolveSlotTimes(vs),
+      );
+
+      if (targetSlots.length === 0) return false;
+
+      return targetSlots.some((targetSlot) =>
+        occupiedTimes.some((occupied) =>
+          timesConflict(
+            occupied.startTime,
+            occupied.endTime,
+            targetSlot.startTime,
+            targetSlot.endTime,
+          ),
+        ),
+      );
+    },
+    [teams, resolveSlotTimes, timesConflict],
+  );
+
+  // Calculate volunteers with partial availability (assigned but with available non-conflicting slots)
+  const partiallyAssignedVolunteers = useMemo(() => {
+    return volunteers.filter((volunteer) => {
+      // Must have at least one team assignment
+      if (!volunteer.teamMembers || volunteer.teamMembers.length === 0) {
+        return false;
+      }
+
+      const occupiedTimes = getOccupiedTimes(volunteer.id);
+
+      // Check if there's any slot without time conflict
+      return slotTemplates.some((slot) => {
+        return !occupiedTimes.some((occupied) =>
+          timesConflict(
+            occupied.startTime,
+            occupied.endTime,
+            slot.startTime,
+            slot.endTime,
+          ),
+        );
+      });
+    });
+  }, [volunteers, slotTemplates, timesConflict, getOccupiedTimes]);
+
+  // Get occupied slots for a volunteer (for display in modal)
+  const getVolunteerOccupiedSlots = (volunteer: Volunteer) => {
+    const occupied: Array<{
+      teamName: string;
+      venueName: string;
+      slotTime?: string;
+    }> = [];
+
+    volunteer.teamMembers?.forEach((member) => {
+      const team = teams.find((t) => t.id === member.teamId);
+      if (team?.venueSlots) {
+        team.venueSlots.forEach((slot) => {
+          const venue = venues.find((v) => v.id === slot.venueId);
+          if (slot.isDefaultVenue) {
+            occupied.push({
+              teamName: team.name,
+              venueName: venue?.name || "Venue desconhecido",
+              slotTime: "Todos os horários (venue padrão)",
+            });
+          } else {
+            const slotTemplate = slot.slotTemplateId
+              ? slotTemplates.find((s) => s.id === slot.slotTemplateId)
+              : null;
+            const slotTime = slotTemplate
+              ? `${slotTemplate.startTime.substring(0, 5)} - ${slotTemplate.endTime.substring(0, 5)}`
+              : undefined;
+            occupied.push({
+              teamName: team.name,
+              venueName: venue?.name || "Venue desconhecido",
+              slotTime,
+            });
+          }
+        });
+      }
+    });
+
+    return occupied;
+  };
 
   // Filter teams by venue and type
   const filteredTeams = useMemo(() => {
@@ -269,6 +649,113 @@ export default function TeamsPage() {
     }
   };
 
+  const handleToggleVolunteerLeader = async (volunteer: Volunteer) => {
+    try {
+      const updated = await volunteersService.updateLeader(
+        volunteer.id,
+        !volunteer.isLeader,
+      );
+      setVolunteers((prev) =>
+        prev.map((v) => (v.id === volunteer.id ? updated : v)),
+      );
+      setUnassignedVolunteers((prev) =>
+        prev.map((v) => (v.id === volunteer.id ? { ...v, ...updated } : v)),
+      );
+      toast.success(
+        updated.isLeader
+          ? `${volunteer.fullName} marcado como líder`
+          : `${volunteer.fullName} removido como líder`,
+      );
+      await refreshTeamsData();
+    } catch (error) {
+      console.error("Erro ao atualizar líder do voluntário:", error);
+      toast.error("Erro ao atualizar líder do voluntário");
+    }
+  };
+
+  const ensureLeaderOnTeam = async (
+    volunteerId: string,
+    teamId: string,
+    isLeaderOverride?: boolean,
+  ) => {
+    const isLeader =
+      isLeaderOverride ??
+      volunteers.find((v) => v.id === volunteerId)?.isLeader;
+    if (!isLeader) return;
+    try {
+      await teamsService.setLeader(teamId, volunteerId);
+    } catch (error) {
+      console.error("Erro ao definir líder automaticamente:", error);
+    }
+  };
+
+  const handleCancel = async (
+    volunteerId: string,
+    volunteerName: string,
+    isCancelled: boolean,
+  ) => {
+    if (isCancelled) {
+      if (
+        !confirm(
+          `Reativar ${volunteerName}? O status voltará para Pendente e ele não será adicionado de volta às equipes automaticamente.`,
+        )
+      )
+        return;
+      try {
+        const updatedVolunteer =
+          await volunteersService.reactivate(volunteerId);
+        setVolunteers((prev) =>
+          prev.map((v) =>
+            v.id === volunteerId ? { ...v, ...updatedVolunteer } : v,
+          ),
+        );
+        const statusLabel =
+          VOLUNTEER_STATUS_LABELS[updatedVolunteer.status] ??
+          updatedVolunteer.status;
+        toast.success(`${volunteerName} reativado — status: ${statusLabel}`);
+        await refreshTeamsData();
+      } catch (error) {
+        console.error("Erro ao reativar voluntário:", error);
+        toast.error("Erro ao reativar voluntário");
+      }
+    } else {
+      if (
+        !confirm(
+          `Cancelar ${volunteerName}? Ele será removido de todas as equipes imediatamente.`,
+        )
+      )
+        return;
+      try {
+        const updatedVolunteer = await volunteersService.cancel(volunteerId);
+        setVolunteers((prev) =>
+          prev.map((v) =>
+            v.id === volunteerId ? { ...v, ...updatedVolunteer } : v,
+          ),
+        );
+        toast.success(`${volunteerName} cancelado e removido das equipes`);
+        await refreshTeamsData();
+      } catch (error) {
+        console.error("Erro ao cancelar voluntário:", error);
+        toast.error("Erro ao cancelar voluntário");
+      }
+    }
+  };
+
+  const handleSaveNotes = async (volunteerId: string, notes: string) => {
+    try {
+      const updatedVolunteer = await volunteersService.updateNotes(
+        volunteerId,
+        notes,
+      );
+      setVolunteers((prev) =>
+        prev.map((v) => (v.id === volunteerId ? updatedVolunteer : v)),
+      );
+    } catch (error) {
+      console.error("Erro ao salvar observação:", error);
+      toast.error("Erro ao salvar observação");
+    }
+  };
+
   // Create team
   const handleCreateTeam = async () => {
     if (!newTeamName.trim()) {
@@ -284,6 +771,7 @@ export default function TeamsPage() {
       const team = await teamsService.create({
         name: newTeamName,
         types: newTeamTypes,
+        notes: newTeamNotes.trim() ? newTeamNotes : undefined,
       });
 
       // Set venue slots based on mode
@@ -316,6 +804,7 @@ export default function TeamsPage() {
 
   const resetTeamForm = () => {
     setNewTeamName("");
+    setNewTeamNotes("");
     setNewTeamTypes([]);
     setVenueMode("default");
     setSelectedDefaultVenue("");
@@ -326,6 +815,7 @@ export default function TeamsPage() {
   const handleEditTeam = (team: Team) => {
     setEditingTeam(team);
     setEditTeamName(team.name);
+    setEditTeamNotes(team.notes ?? "");
     setEditTeamTypes(parseTeamTypes(team.types));
 
     // Determine venue mode and populate data
@@ -378,6 +868,7 @@ export default function TeamsPage() {
       await teamsService.update(editingTeam.id, {
         name: editTeamName,
         types: editTeamTypes,
+        ...(editTeamNotes.trim() ? { notes: editTeamNotes } : {}),
       });
 
       // Update venue slots
@@ -405,6 +896,7 @@ export default function TeamsPage() {
       toast.success("Equipe atualizada com sucesso!");
       setShowEditTeamModal(false);
       setEditingTeam(null);
+      setEditTeamNotes("");
       await refreshTeamsData();
     } catch (error: unknown) {
       console.error("Erro ao atualizar equipe:", error);
@@ -445,6 +937,31 @@ export default function TeamsPage() {
       if (dragSource === "unassigned") {
         // Add to team from unassigned
         await teamsService.addMember(teamId, draggedVolunteer.id);
+        await ensureLeaderOnTeam(
+          draggedVolunteer.id,
+          teamId,
+          draggedVolunteer.isLeader,
+        );
+        toast.success(`${draggedVolunteer.fullName} adicionado à equipe`);
+      } else if (dragSource === "partial") {
+        // Check for time conflicts before adding from partial availability
+        const occupiedTimes = getOccupiedTimes(draggedVolunteer.id);
+        if (hasConflictWithTeam(occupiedTimes, teamId)) {
+          toast.error(
+            `${draggedVolunteer.fullName} já possui compromissos em horários conflitantes com esta equipe`,
+          );
+          setDraggedVolunteer(null);
+          setDragSource(null);
+          return;
+        }
+
+        // Add to team if no conflict
+        await teamsService.addMember(teamId, draggedVolunteer.id);
+        await ensureLeaderOnTeam(
+          draggedVolunteer.id,
+          teamId,
+          draggedVolunteer.isLeader,
+        );
         toast.success(`${draggedVolunteer.fullName} adicionado à equipe`);
       } else if (dragSource && dragSource !== teamId) {
         // Moving from another team - show modal
@@ -484,10 +1001,26 @@ export default function TeamsPage() {
   const handleAssignConfirm = async () => {
     if (!selectedVolunteerToAssign || !selectedTeamToAssign) return;
 
+    // Check for time conflicts if the volunteer already has team assignments
+    if (selectedVolunteerToAssign.teamMembers?.length) {
+      const occupiedTimes = getOccupiedTimes(selectedVolunteerToAssign.id);
+      if (hasConflictWithTeam(occupiedTimes, selectedTeamToAssign)) {
+        toast.error(
+          `${selectedVolunteerToAssign.fullName} já possui compromissos em horários conflitantes com a equipe selecionada`,
+        );
+        return;
+      }
+    }
+
     try {
       await teamsService.addMember(
         selectedTeamToAssign,
         selectedVolunteerToAssign.id,
+      );
+      await ensureLeaderOnTeam(
+        selectedVolunteerToAssign.id,
+        selectedTeamToAssign,
+        selectedVolunteerToAssign.isLeader,
       );
       toast.success(
         `${selectedVolunteerToAssign.fullName} adicionado à equipe`,
@@ -509,6 +1042,19 @@ export default function TeamsPage() {
   const handleMoveConfirm = async (duplicate: boolean) => {
     if (!movingMember) return;
 
+    // For duplicate: check all occupied times. For transfer: exclude fromTeam (they'll leave it)
+    const occupiedTimes = getOccupiedTimes(
+      movingMember.volunteerId,
+      duplicate ? undefined : movingMember.fromTeamId,
+    );
+
+    if (hasConflictWithTeam(occupiedTimes, movingMember.toTeamId)) {
+      toast.error(
+        `${movingMember.volunteerName} já possui compromissos em horários conflitantes com a equipe de destino`,
+      );
+      return;
+    }
+
     try {
       await teamsService.moveMember(
         movingMember.volunteerId,
@@ -516,6 +1062,7 @@ export default function TeamsPage() {
         movingMember.toTeamId,
         duplicate,
       );
+      await ensureLeaderOnTeam(movingMember.volunteerId, movingMember.toTeamId);
       toast.success(
         duplicate
           ? `${movingMember.volunteerName} duplicado para a equipe`
@@ -545,19 +1092,24 @@ export default function TeamsPage() {
   };
 
   // Set member as leader
-  const handleSetLeader = async (
+  const handleToggleTeamLeader = async (
     teamId: string,
     volunteerId: string,
     volunteerName: string,
+    isLeader: boolean,
   ) => {
     try {
-      await teamsService.setLeader(teamId, volunteerId);
-      toast.success(`${volunteerName} definido como líder da equipe`);
+      await teamsService.setLeaderStatus(teamId, volunteerId, !isLeader);
+      toast.success(
+        !isLeader
+          ? `${volunteerName} definido como líder da equipe`
+          : `${volunteerName} removido da liderança da equipe`,
+      );
       await refreshTeamsData();
     } catch (error) {
-      console.error("Erro ao definir líder:", error);
+      console.error("Erro ao atualizar líder:", error);
       const errorMessage =
-        error instanceof Error ? error.message : "Erro ao definir líder";
+        error instanceof Error ? error.message : "Erro ao atualizar líder";
       toast.error(errorMessage);
     }
   };
@@ -579,18 +1131,33 @@ export default function TeamsPage() {
   const handleMemberAction = async () => {
     if (!selectedMemberForAction || !targetTeamId) return;
 
+    const isDuplicate = memberActionType === "duplicate";
+
+    // For duplicate: check all occupied times. For transfer: exclude fromTeam (they'll leave it)
+    const occupiedTimes = getOccupiedTimes(
+      selectedMemberForAction.volunteerId,
+      isDuplicate ? undefined : selectedMemberForAction.teamId,
+    );
+
+    if (hasConflictWithTeam(occupiedTimes, targetTeamId)) {
+      toast.error(
+        `${selectedMemberForAction.volunteerName} já possui compromissos em horários conflitantes com a equipe selecionada`,
+      );
+      return;
+    }
+
     try {
       // Use atomic moveMember operation with duplicate flag
       await teamsService.moveMember(
         selectedMemberForAction.volunteerId,
         selectedMemberForAction.teamId,
         targetTeamId,
-        memberActionType === "duplicate",
+        isDuplicate,
       );
       toast.success(
-        memberActionType === "transfer"
-          ? `${selectedMemberForAction.volunteerName} transferido com sucesso`
-          : `${selectedMemberForAction.volunteerName} duplicado para outra equipe`,
+        isDuplicate
+          ? `${selectedMemberForAction.volunteerName} duplicado para outra equipe`
+          : `${selectedMemberForAction.volunteerName} transferido com sucesso`,
       );
       await refreshTeamsData();
       setShowMemberActionModal(false);
@@ -694,108 +1261,229 @@ export default function TeamsPage() {
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
                 <span>Lista de Voluntários</span>
-                <div className="relative w-72">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                  <Input
-                    placeholder="Buscar por nome, email ou CPF..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10"
-                  />
+                <div className="flex items-center gap-2">
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-[160px]">
+                      <SelectValue placeholder="Filtrar por status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      <SelectItem value="leader">Líderes</SelectItem>
+                      <SelectItem value="pending">Pendente</SelectItem>
+                      <SelectItem value="approved">Aprovado</SelectItem>
+                      <SelectItem value="rejected">Rejeitado</SelectItem>
+                      <SelectItem value="cancelled">Cancelado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div className="relative w-72">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                    <Input
+                      placeholder="Buscar por nome, email ou CPF..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
                 </div>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nome</TableHead>
-                      <TableHead>WhatsApp</TableHead>
-                      <TableHead>E-mail</TableHead>
-                      <TableHead>CPF</TableHead>
-                      <TableHead>Cidade</TableHead>
-                      <TableHead>Endereço</TableHead>
-                      <TableHead>Data Nasc.</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-center">Aprovar?</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredVolunteers.length === 0 ? (
+              {/* Scrollbar superior sincronizada */}
+              <div
+                ref={topBarTrackRef}
+                onMouseDown={handleTopBarMouseDown}
+                className="top-scrollbar themed-scrollbar mb-1"
+              >
+                <div
+                  className="top-scrollbar-thumb"
+                  style={{
+                    width: `${topBarThumbWidth}%`,
+                    left: `${topBarThumbLeft}%`,
+                    opacity: canTopBarScroll ? 1 : 0.35,
+                  }}
+                />
+              </div>
+              <div
+                ref={tableScrollRef}
+                onScroll={handleBottomScroll}
+                className="rounded-md border overflow-x-auto themed-scrollbar"
+              >
+                <div ref={tableContentRef} className="min-w-max">
+                  <Table className="w-full">
+                    <TableHeader>
                       <TableRow>
-                        <TableCell
-                          colSpan={9}
-                          className="text-center py-8 text-muted-foreground"
-                        >
-                          Nenhum voluntário encontrado
-                        </TableCell>
+                        <TableHead className="min-w-[120px]">Nome</TableHead>
+                        <TableHead className="min-w-[110px]">
+                          WhatsApp
+                        </TableHead>
+                        <TableHead className="min-w-[150px]">E-mail</TableHead>
+                        <TableHead className="min-w-[90px]">Cidade</TableHead>
+                        <TableHead className="min-w-[90px]">
+                          Data Nasc.
+                        </TableHead>
+                        <TableHead className="min-w-[90px]">Status</TableHead>
+                        <TableHead className="min-w-[90px] text-center">
+                          Ações
+                        </TableHead>
+                        <TableHead className="min-w-[220px]">Obs</TableHead>
                       </TableRow>
-                    ) : (
-                      filteredVolunteers.map((volunteer) => (
-                        <TableRow key={volunteer.id}>
-                          <TableCell className="font-medium">
-                            {volunteer.fullName}
-                          </TableCell>
-                          <TableCell>{volunteer.whatsapp}</TableCell>
-                          <TableCell>{volunteer.email}</TableCell>
-                          <TableCell>{volunteer.cpf}</TableCell>
-                          <TableCell>{volunteer.city}</TableCell>
-                          <TableCell>
-                            {volunteer.street}, {volunteer.houseNumber}
-                            {volunteer.complement &&
-                              ` - ${volunteer.complement}`}
-                            , {volunteer.neighborhood}
-                          </TableCell>
-                          <TableCell>
-                            {new Date(volunteer.birthDate).toLocaleDateString(
-                              "pt-BR",
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={
-                                volunteer.status === "approved"
-                                  ? "default"
-                                  : volunteer.status === "rejected"
-                                    ? "destructive"
-                                    : "secondary"
-                              }
-                            >
-                              {VOLUNTEER_STATUS_LABELS[volunteer.status]}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center justify-center gap-2">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-100"
-                                onClick={() =>
-                                  handleApproval(volunteer.id, true)
-                                }
-                                disabled={volunteer.status === "approved"}
-                              >
-                                <Check className="h-5 w-5" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-100"
-                                onClick={() =>
-                                  handleApproval(volunteer.id, false)
-                                }
-                                disabled={volunteer.status === "rejected"}
-                              >
-                                <X className="h-5 w-5" />
-                              </Button>
-                            </div>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredVolunteers.length === 0 ? (
+                        <TableRow>
+                          <TableCell
+                            colSpan={8}
+                            className="text-center py-8 text-muted-foreground"
+                          >
+                            Nenhum voluntário encontrado
                           </TableCell>
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
+                      ) : (
+                        filteredVolunteers.map((volunteer) => (
+                          <TableRow
+                            key={volunteer.id}
+                            className={
+                              volunteer.isLeader
+                                ? "bg-yellow-500/10 border-yellow-500/30"
+                                : undefined
+                            }
+                          >
+                            <TableCell className="font-medium whitespace-nowrap">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className="inline-flex items-center gap-2 hover:underline"
+                                  >
+                                    {volunteer.fullName}
+                                    {volunteer.isLeader && (
+                                      <Crown className="h-4 w-4 text-yellow-500" />
+                                    )}
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start">
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      handleToggleVolunteerLeader(volunteer)
+                                    }
+                                  >
+                                    <Crown className="h-4 w-4 mr-2 text-yellow-500" />
+                                    {volunteer.isLeader
+                                      ? "Remover status de líder"
+                                      : "Marcar como líder"}
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {volunteer.whatsapp}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {volunteer.email}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {volunteer.city}
+                            </TableCell>
+                            <TableCell>
+                              {new Date(volunteer.birthDate).toLocaleDateString(
+                                "pt-BR",
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={
+                                  volunteer.status === "approved"
+                                    ? "default"
+                                    : volunteer.status === "rejected"
+                                      ? "destructive"
+                                      : volunteer.status === "cancelled"
+                                        ? "secondary"
+                                        : "secondary"
+                                }
+                                className={
+                                  volunteer.status === "cancelled"
+                                    ? "bg-orange-500 text-white hover:bg-orange-600"
+                                    : undefined
+                                }
+                              >
+                                {VOLUNTEER_STATUS_LABELS[volunteer.status]}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center justify-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-100"
+                                  onClick={() =>
+                                    handleApproval(volunteer.id, true)
+                                  }
+                                  disabled={
+                                    volunteer.status === "approved" ||
+                                    volunteer.status === "cancelled"
+                                  }
+                                  title="Aprovar"
+                                >
+                                  <Check className="h-5 w-5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-100"
+                                  onClick={() =>
+                                    handleApproval(volunteer.id, false)
+                                  }
+                                  disabled={
+                                    volunteer.status === "rejected" ||
+                                    volunteer.status === "cancelled"
+                                  }
+                                  title="Rejeitar"
+                                >
+                                  <X className="h-5 w-5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className={
+                                    volunteer.status === "cancelled"
+                                      ? "h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-100"
+                                      : "h-8 w-8 text-orange-600 hover:text-orange-700 hover:bg-orange-100"
+                                  }
+                                  onClick={() =>
+                                    handleCancel(
+                                      volunteer.id,
+                                      volunteer.fullName,
+                                      volunteer.status === "cancelled",
+                                    )
+                                  }
+                                  title={
+                                    volunteer.status === "cancelled"
+                                      ? "Reativar (volta para Pendente)"
+                                      : "Cancelar (remove das equipes)"
+                                  }
+                                >
+                                  {volunteer.status === "cancelled" ? (
+                                    <RotateCcw className="h-5 w-5" />
+                                  ) : (
+                                    <Ban className="h-5 w-5" />
+                                  )}
+                                </Button>
+                              </div>
+                            </TableCell>
+                            <TableCell className="min-w-[220px]">
+                              <NotesCell
+                                value={volunteer.notes ?? ""}
+                                onSave={(notes) =>
+                                  handleSaveNotes(volunteer.id, notes)
+                                }
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -848,46 +1536,96 @@ export default function TeamsPage() {
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-            {/* Não Atribuídos */}
-            <Card className="lg:col-span-1" onDragOver={handleDragOver}>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <UserPlus className="h-5 w-5" />
-                  Não Atribuídos
-                  <Badge variant="secondary" className="ml-auto">
-                    {unassignedVolunteers.length}
-                  </Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 max-h-[500px] overflow-y-auto">
-                {unassignedVolunteers.length === 0 ? (
-                  <p className="text-muted-foreground text-sm text-center py-4">
-                    Todos os voluntários aprovados estão em equipes
-                  </p>
-                ) : (
-                  unassignedVolunteers.map((volunteer) => (
-                    <div
-                      key={volunteer.id}
-                      draggable
-                      onDragStart={() =>
-                        handleDragStart(volunteer, "unassigned")
-                      }
-                      onClick={() => handleVolunteerClick(volunteer)}
-                      className="p-3 bg-muted rounded-lg cursor-pointer hover:bg-muted/80 transition-colors flex items-center gap-2"
-                    >
-                      <GripVertical className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">
-                        {volunteer.fullName}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
+          <div className="flex flex-col gap-4">
+            {/* Faixa superior: Não Atribuídos + Disponibilidade Parcial */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Não Atribuídos */}
+              <Card className="" onDragOver={handleDragOver}>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <UserPlus className="h-5 w-5" />
+                    Não Atribuídos
+                    <Badge variant="secondary" className="ml-auto">
+                      {unassignedVolunteers.length}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 max-h-[500px] overflow-y-auto">
+                  {unassignedVolunteers.length === 0 ? (
+                    <p className="text-muted-foreground text-sm text-center py-4">
+                      Todos os voluntários aprovados estão em equipes
+                    </p>
+                  ) : (
+                    unassignedVolunteers.map((volunteer) => (
+                      <div
+                        key={volunteer.id}
+                        draggable
+                        onDragStart={() =>
+                          handleDragStart(volunteer, "unassigned")
+                        }
+                        onClick={() => handleVolunteerClick(volunteer)}
+                        className="p-3 bg-muted rounded-lg cursor-pointer hover:bg-muted/80 transition-colors flex items-center gap-2"
+                      >
+                        <GripVertical className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">
+                          {volunteer.fullName}
+                        </span>
+                        {volunteer.isLeader && (
+                          <Crown className="h-4 w-4 text-yellow-500" />
+                        )}
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
 
-            {/* Equipes */}
-            <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {/* Disponibilidade Parcial */}
+              <Card className="lg:col-span-1" onDragOver={handleDragOver}>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Clock className="h-5 w-5" />
+                    Disponibilidade Parcial
+                    <Badge variant="secondary" className="ml-auto">
+                      {partiallyAssignedVolunteers.length}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 max-h-[500px] overflow-y-auto">
+                  {partiallyAssignedVolunteers.length === 0 ? (
+                    <p className="text-muted-foreground text-sm text-center py-4">
+                      Nenhum voluntário com disponibilidade parcial
+                    </p>
+                  ) : (
+                    partiallyAssignedVolunteers.map((volunteer) => (
+                      <div
+                        key={volunteer.id}
+                        draggable
+                        onDragStart={() =>
+                          handleDragStart(volunteer, "partial")
+                        }
+                        onClick={() => {
+                          setSelectedPartialVolunteer(volunteer);
+                          setShowPartialAvailabilityModal(true);
+                        }}
+                        className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg cursor-pointer hover:bg-amber-500/20 transition-colors flex items-center gap-2"
+                      >
+                        <Clock className="h-4 w-4 text-amber-600" />
+                        <span className="text-sm font-medium">
+                          {volunteer.fullName}
+                        </span>
+                        {volunteer.isLeader && (
+                          <Crown className="h-4 w-4 text-yellow-500" />
+                        )}
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+            {/* fim grid faixa superior */}
+
+            {/* Equipes — quebra linha automaticamente, sem scroll horizontal */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {filteredTeams.length === 0 ? (
                 <Card className="col-span-full">
                   <CardContent className="py-12 text-center text-muted-foreground">
@@ -1011,21 +1749,22 @@ export default function TeamsPage() {
                                     </span>
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="start">
-                                    {!member.isLeader && (
-                                      <DropdownMenuItem
-                                        onClick={() =>
-                                          member.volunteer &&
-                                          handleSetLeader(
-                                            team.id,
-                                            member.volunteerId,
-                                            member.volunteer.fullName,
-                                          )
-                                        }
-                                      >
-                                        <Crown className="h-4 w-4 mr-2 text-yellow-500" />
-                                        Nomear como líder
-                                      </DropdownMenuItem>
-                                    )}
+                                    <DropdownMenuItem
+                                      onClick={() =>
+                                        member.volunteer &&
+                                        handleToggleTeamLeader(
+                                          team.id,
+                                          member.volunteerId,
+                                          member.volunteer.fullName,
+                                          member.isLeader,
+                                        )
+                                      }
+                                    >
+                                      <Crown className="h-4 w-4 mr-2 text-yellow-500" />
+                                      {member.isLeader
+                                        ? "Remover liderança"
+                                        : "Nomear como líder"}
+                                    </DropdownMenuItem>
                                     <DropdownMenuItem
                                       onClick={() =>
                                         member.volunteer &&
@@ -1098,6 +1837,17 @@ export default function TeamsPage() {
                 value={newTeamName}
                 onChange={(e) => setNewTeamName(e.target.value)}
                 placeholder="Digite o nome da equipe"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="teamNotes">Observação</Label>
+              <Textarea
+                id="teamNotes"
+                value={newTeamNotes}
+                onChange={(e) => setNewTeamNotes(e.target.value)}
+                placeholder="Adicione observações sobre a equipe"
+                className="min-h-[80px]"
               />
             </div>
 
@@ -1290,6 +2040,92 @@ export default function TeamsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Modal: Disponibilidade Parcial */}
+      <Dialog
+        open={showPartialAvailabilityModal}
+        onOpenChange={setShowPartialAvailabilityModal}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Disponibilidade Parcial: {selectedPartialVolunteer?.fullName}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
+              <p className="text-sm text-amber-900">
+                Este voluntário está alocado em algumas equipes/slots e pode ser
+                adicionado em outras.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="font-semibold text-sm">Slots já Ocupados:</h4>
+              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                {(() => {
+                  if (!selectedPartialVolunteer) {
+                    return (
+                      <p className="text-sm text-muted-foreground">
+                        Nenhum slot encontrado
+                      </p>
+                    );
+                  }
+
+                  const occupiedSlots = getVolunteerOccupiedSlots(
+                    selectedPartialVolunteer,
+                  );
+
+                  if (occupiedSlots.length === 0) {
+                    return (
+                      <p className="text-sm text-muted-foreground">
+                        Nenhum slot encontrado
+                      </p>
+                    );
+                  }
+
+                  return occupiedSlots.map((slot, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-start gap-2 p-2 bg-muted rounded"
+                    >
+                      <div className="flex-1 text-sm">
+                        <p className="font-medium">{slot.teamName}</p>
+                        <p className="text-muted-foreground text-xs">
+                          {slot.venueName}
+                          {slot.slotTime && ` • ${slot.slotTime}`}
+                        </p>
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowPartialAvailabilityModal(false)}
+            >
+              Fechar
+            </Button>
+            <Button
+              onClick={() => {
+                setShowPartialAvailabilityModal(false);
+                if (selectedPartialVolunteer) {
+                  setSelectedVolunteerToAssign(selectedPartialVolunteer);
+                  setSelectedTeamToAssign("");
+                  setShowAssignModal(true);
+                }
+              }}
+            >
+              Associar com equipe
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Modal: Editar Equipe */}
       <Dialog open={showEditTeamModal} onOpenChange={setShowEditTeamModal}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
@@ -1305,6 +2141,17 @@ export default function TeamsPage() {
                 value={editTeamName}
                 onChange={(e) => setEditTeamName(e.target.value)}
                 placeholder="Digite o nome da equipe"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="editTeamNotes">Observação</Label>
+              <Textarea
+                id="editTeamNotes"
+                value={editTeamNotes}
+                onChange={(e) => setEditTeamNotes(e.target.value)}
+                placeholder="Adicione observações sobre a equipe"
+                className="min-h-[80px]"
               />
             </div>
 
@@ -1434,6 +2281,7 @@ export default function TeamsPage() {
               onClick={() => {
                 setShowEditTeamModal(false);
                 setEditingTeam(null);
+                setEditTeamNotes("");
               }}
             >
               Cancelar

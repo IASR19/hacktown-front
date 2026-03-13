@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -56,9 +56,22 @@ All colors MUST be HSL.
     --sidebar-ring: 187 100% 50%;
 
     /* Gradients */
-    --gradient-neon: linear-gradient(135deg, hsl(187 100% 50%) 0%, hsl(330 100% 60%) 50%, hsl(270 100% 65%) 100%);
-    --gradient-card: linear-gradient(145deg, hsl(220 25% 12%) 0%, hsl(220 25% 8%) 100%);
-    --gradient-glow: radial-gradient(ellipse at center, hsl(187 100% 50% / 0.15) 0%, transparent 70%);
+    --gradient-neon: linear-gradient(
+      135deg,
+      hsl(187 100% 50%) 0%,
+      hsl(330 100% 60%) 50%,
+      hsl(270 100% 65%) 100%
+    );
+    --gradient-card: linear-gradient(
+      145deg,
+      hsl(220 25% 12%) 0%,
+      hsl(220 25% 8%) 100%
+    );
+    --gradient-glow: radial-gradient(
+      ellipse at center,
+      hsl(187 100% 50% / 0.15) 0%,
+      transparent 70%
+    );
   }
 
   .dark {
@@ -73,7 +86,7 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    font-family: 'Space Grotesk', system-ui, sans-serif;
+    font-family: "Space Grotesk", system-ui, sans-serif;
   }
 }
 
@@ -87,13 +100,13 @@ All colors MUST be HSL.
   }
 
   .neon-glow {
-    box-shadow: 
+    box-shadow:
       0 0 20px hsl(var(--hacktown-cyan) / 0.3),
       0 0 40px hsl(var(--hacktown-cyan) / 0.1);
   }
 
   .neon-glow-pink {
-    box-shadow: 
+    box-shadow:
       0 0 20px hsl(var(--hacktown-pink) / 0.3),
       0 0 40px hsl(var(--hacktown-pink) / 0.1);
   }
@@ -113,8 +126,13 @@ All colors MUST be HSL.
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
 }
 
 @layer components {
@@ -123,7 +141,7 @@ All colors MUST be HSL.
   }
 
   .stat-card::before {
-    content: '';
+    content: "";
     @apply absolute inset-0 opacity-0 transition-opacity duration-300;
     background: var(--gradient-neon);
   }
@@ -138,6 +156,64 @@ All colors MUST be HSL.
 
   .slot-badge {
     @apply font-mono text-xs px-3 py-2 rounded-lg bg-hacktown-dark border border-border;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: "JetBrains Mono", monospace;
+  }
+
+  .top-scrollbar {
+    position: relative;
+    height: 8px;
+    background: hsl(var(--muted) / 0.6);
+    border-radius: 9999px;
+    cursor: pointer;
+  }
+
+  .top-scrollbar-thumb {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    min-width: 24px;
+    background: hsl(var(--hacktown-cyan) / 0.9);
+    border-radius: 9999px;
+    transition: background-color 120ms ease;
+  }
+
+  .top-scrollbar:hover .top-scrollbar-thumb {
+    background: hsl(var(--hacktown-cyan) / 1);
+  }
+
+  .top-scrollbar::-webkit-scrollbar {
+    height: 12px;
+  }
+
+  .top-scrollbar::-webkit-scrollbar-track {
+    background: hsl(var(--muted) / 0.7);
+    border-radius: 9999px;
+  }
+
+  .top-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(var(--hacktown-cyan) / 0.85);
+    border-radius: 9999px;
+  }
+
+  .top-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--hacktown-cyan) / 1);
+  }
+
+  .themed-scrollbar::-webkit-scrollbar {
+    height: 8px;
+  }
+
+  .themed-scrollbar::-webkit-scrollbar-track {
+    background: hsl(var(--muted) / 0.6);
+    border-radius: 9999px;
+  }
+
+  .themed-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(var(--hacktown-cyan) / 0.9);
+    border-radius: 9999px;
+  }
+
+  .themed-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--hacktown-cyan) / 1);
   }
 }
