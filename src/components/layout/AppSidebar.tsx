@@ -14,6 +14,7 @@ import {
   Wrench,
   Mic,
   Users,
+  FileText,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useNavigate } from "react-router-dom";
@@ -110,6 +111,19 @@ const menuItems = [
         url: "/teams",
         icon: Users,
         color: "text-hacktown-green",
+      },
+    ],
+  },
+  {
+    title: "Formulários",
+    icon: FileText,
+    color: "text-hacktown-cyan",
+    subItems: [
+      {
+        title: "Formulário do Speaker",
+        url: "/forms",
+        icon: FileText,
+        color: "text-hacktown-cyan",
       },
     ],
   },
