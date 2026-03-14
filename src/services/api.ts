@@ -15,6 +15,10 @@ import {
   TeamMember,
   TeamVenueSlot,
   TeamType,
+  SpeakerFormConfig,
+  SpeakerFormSubmission,
+  CreateSpeakerFormSubmissionPayload,
+  SpeakerFormSection,
 } from "@/types/hacktown";
 
 // Event Config Service
@@ -490,6 +494,71 @@ export const teamsService = {
   async removeVenueSlot(teamId: string, venueSlotId: string): Promise<void> {
     return apiClient.delete<void>(
       `/teams/${teamId}/venue-slots/${venueSlotId}`,
+    );
+  },
+};
+
+// Forms Service
+export const formsService = {
+  async getSpeakerConfig(): Promise<SpeakerFormConfig> {
+    return apiClient.get<SpeakerFormConfig>("/forms/speaker/config");
+  },
+
+  async updateSpeakerConfig(data: {
+    title?: string;
+    description?: string;
+    isPublished?: boolean;
+    submissionStartAt?: string | null;
+    submissionEndAt?: string | null;
+    sections?: SpeakerFormSection[];
+  }): Promise<SpeakerFormConfig> {
+    return apiClient.put<SpeakerFormConfig>("/forms/speaker/config", data);
+  },
+
+  async regenerateSpeakerPublicLink(): Promise<SpeakerFormConfig> {
+    return apiClient.post<SpeakerFormConfig>(
+      "/forms/speaker/config/regenerate-link",
+      {},
+    );
+  },
+
+  async resetSpeakerDefault(): Promise<SpeakerFormConfig> {
+    return apiClient.post<SpeakerFormConfig>(
+      "/forms/speaker/config/reset-default",
+      {},
+    );
+  },
+
+  async listSpeakerSubmissions(): Promise<SpeakerFormSubmission[]> {
+    return apiClient.get<SpeakerFormSubmission[]>("/forms/speaker/submissions");
+  },
+
+  async exportSpeakerSubmissionsCsv(): Promise<{
+    filename: string;
+    csv: string;
+  }> {
+    return apiClient.get<{ filename: string; csv: string }>(
+      "/forms/speaker/submissions/export-csv",
+    );
+  },
+
+  async getSpeakerPublicForm(token: string): Promise<{
+    title: string;
+    description?: string;
+    submissionStartAt?: string;
+    submissionEndAt?: string;
+    sections: SpeakerFormSection[];
+  }> {
+    return apiClient.get(`/forms/speaker/public/${token}`);
+  },
+
+  async submitSpeakerPublicForm(
+    token: string,
+    data: CreateSpeakerFormSubmissionPayload,
+  ): Promise<SpeakerFormSubmission> {
+    return apiClient.post<SpeakerFormSubmission>(
+      `/forms/speaker/public/${token}/submit`,
+      data,
     );
   },
 };

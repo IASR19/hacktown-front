@@ -15,6 +15,8 @@ import Slots from "@/pages/Slots";
 import CapacityManagement from "@/pages/CapacityManagement";
 import CapacityAnalysis from "@/pages/CapacityAnalysis";
 import Teams from "@/pages/Teams";
+import Forms from "@/pages/Forms";
+import SpeakerPublicForm from "@/pages/SpeakerPublicForm";
 import Login from "@/pages/Login";
 import NotFound from "./pages/NotFound";
 
@@ -145,6 +147,20 @@ const App = () => (
                     </AppLayout>
                   </PrivateRoute>
                 }
+              />
+              <Route
+                path="/forms"
+                element={
+                  <PrivateRoute>
+                    <AppLayout>
+                      <Forms />
+                    </AppLayout>
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/forms/speaker/:token"
+                element={<SpeakerPublicForm />}
               />
               <Route path="*" element={<NotFound />} />
             </Routes>

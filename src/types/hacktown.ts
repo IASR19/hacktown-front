@@ -259,6 +259,119 @@ export interface TeamVenueSlot {
   createdAt: string;
 }
 
+// ========== FORMS ==========
+
+export type SpeakerFormFieldType =
+  | "short_text"
+  | "long_text"
+  | "email"
+  | "phone"
+  | "cpf"
+  | "url"
+  | "dropdown"
+  | "checkbox"
+  | "radio"
+  | "multi_checkbox"
+  | "file_upload"
+  | "file_image"
+  | "date"
+  | "datetime"
+  | "text"
+  | "textarea";
+
+export interface SpeakerFieldValidation {
+  required?: boolean;
+  regex?: string;
+  regexMessage?: string;
+  minLength?: number;
+  maxLength?: number;
+  validEmail?: boolean;
+  validUrl?: boolean;
+  validCpf?: boolean;
+  phoneFormat?: "BR" | "INTL";
+}
+
+export interface SpeakerFieldConditionalVisibility {
+  dependsOn: string;
+  operator: "equals" | "not_equals" | "contains";
+  value: string | boolean;
+}
+
+export interface SpeakerFormField {
+  id: string;
+  label: string;
+  type: SpeakerFormFieldType;
+  required?: boolean;
+  placeholder?: string;
+  helpText?: string;
+  options?: string[];
+  minLength?: number;
+  maxLength?: number;
+  fileTypes?: string[];
+  maxFileSize?: number;
+  validation?: SpeakerFieldValidation;
+  conditionalVisibility?: SpeakerFieldConditionalVisibility;
+  imageSizeHint?: string;
+}
+
+export interface SpeakerFormSection {
+  id: string;
+  title: string;
+  description?: string;
+  fields: SpeakerFormField[];
+}
+
+export interface SpeakerFormConfig {
+  id: string;
+  formType: string;
+  title: string;
+  description?: string;
+  publicToken: string;
+  isPublished: boolean;
+  submissionStartAt?: string;
+  submissionEndAt?: string;
+  schemaJson: SpeakerFormSection[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SpeakerFormSubmission {
+  id: string;
+  configId: string;
+  fullName: string;
+  cpf: string;
+  email: string;
+  whatsapp: string;
+  preferredName?: string;
+  roleSummary?: string;
+  companyProject?: string;
+  miniBio?: string;
+  state?: string;
+  city?: string;
+  linkedin?: string;
+  photoData?: string;
+  alreadyParticipatedBefore?: boolean;
+  invitedBy?: string;
+  availableThursday: boolean;
+  availableFriday: boolean;
+  availableSaturday: boolean;
+  availableSunday: boolean;
+  contentTrack?: string;
+  activityFormats?: string;
+  relevantLinks?: string;
+  allowImageDisclosure: boolean;
+  addedEmailId?: string;
+  hasDefinedTitleAndDescription?: boolean;
+  activityDescription?: string;
+  activityTitle?: string;
+  answersJson?: Record<string, unknown>;
+  submittedAt: string;
+}
+
+export interface CreateSpeakerFormSubmissionPayload {
+  answers: Record<string, unknown>;
+}
+
 // Helper to parse team types from comma-separated string
 export function parseTeamTypes(types: string): TeamType[] {
   if (!types) return [];
