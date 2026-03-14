@@ -404,7 +404,7 @@ export default function FormsPage() {
     const newField: SpeakerFormField = {
       id: `field-${Date.now()}`,
       label: "Novo campo",
-      type: "text",
+      type: "short_text",
       required: false,
       placeholder: "",
       helpText: "",

@@ -35,6 +35,16 @@ type UploadedFileAnswer = {
   height?: number;
 };
 
+function formatFileSize(sizeInBytes?: number): string {
+  if (!sizeInBytes || sizeInBytes <= 0) return "0 KB";
+
+  const sizeInMb = sizeInBytes / (1024 * 1024);
+  if (sizeInMb >= 1) return `${sizeInMb.toFixed(2)} MB`;
+
+  const sizeInKb = sizeInBytes / 1024;
+  return `${sizeInKb.toFixed(1)} KB`;
+}
+
 async function fileToDataUrl(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -231,11 +241,61 @@ export default function SpeakerPublicFormPage() {
     }
   };
 
+  const handleFileUpload = async (
+    field: SpeakerFormField,
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (
+      Array.isArray(field.fileTypes) &&
+      field.fileTypes.length > 0 &&
+      file.type &&
+      !field.fileTypes.includes(file.type)
+    ) {
+      toast.error("Tipo de arquivo não permitido para este campo");
+      return;
+    }
+
+    if (
+      typeof field.maxFileSize === "number" &&
+      file.size > field.maxFileSize
+    ) {
+      const maxMb = (field.maxFileSize / (1024 * 1024)).toFixed(1);
+      toast.error(`O arquivo excede o limite de ${maxMb}MB`);
+      return;
+    }
+
+    try {
+      const payload: UploadedFileAnswer = {
+        dataUrl: await fileToDataUrl(file),
+        mimeType: file.type || "application/octet-stream",
+        size: file.size,
+        fileName: file.name,
+      };
+
+      setAnswer(field.id, payload);
+      toast.success("Arquivo anexado com sucesso");
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Não foi possível ler o arquivo";
+      toast.error(message);
+    }
+  };
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
 
     if (!token) {
       toast.error("Link inválido");
+      return;
+    }
+
+    if (!config) {
+      toast.error("Configuração do formulário não está disponível");
       return;
     }
 
@@ -417,7 +477,7 @@ export default function SpeakerPublicFormPage() {
       );
     }
 
-    if (canonicalType === "file_upload" || canonicalType === "file_image") {
+    if (canonicalType === "file_image") {
       const uploaded =
         value && typeof value === "object" && !Array.isArray(value)
           ? (value as UploadedFileAnswer)
@@ -431,11 +491,7 @@ export default function SpeakerPublicFormPage() {
             type="file"
             className="hidden"
             accept={
-              field.fileTypes?.length
-                ? field.fileTypes.join(",")
-                : canonicalType === "file_image"
-                  ? "image/*"
-                  : undefined
+              field.fileTypes?.length ? field.fileTypes.join(",") : "image/*"
             }
             onChange={(e) => void handlePhotoUpload(field, e)}
           />
@@ -466,6 +522,46 @@ export default function SpeakerPublicFormPage() {
                   ? `${uploaded.width}x${uploaded.height}px`
                   : "Imagem pronta para envio"}
               </p>
+            </div>
+          ) : null}
+        </div>
+      );
+    }
+
+    if (canonicalType === "file_upload") {
+      const uploaded =
+        value && typeof value === "object" && !Array.isArray(value)
+          ? (value as UploadedFileAnswer)
+          : null;
+      const inputId = `upload-${field.id}`;
+
+      return (
+        <div className="space-y-2">
+          <Input
+            id={inputId}
+            type="file"
+            className="hidden"
+            accept={
+              field.fileTypes?.length ? field.fileTypes.join(",") : undefined
+            }
+            onChange={(e) => void handleFileUpload(field, e)}
+          />
+          <label
+            htmlFor={inputId}
+            className="inline-flex h-10 cursor-pointer items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+          >
+            {uploaded?.fileName ? "Trocar arquivo" : "Selecionar arquivo"}
+          </label>
+          <p className="text-xs text-muted-foreground">
+            {field.fileTypes?.length
+              ? `Formatos permitidos: ${field.fileTypes.join(", ")}.`
+              : "Anexe o arquivo desejado para esta resposta."}
+          </p>
+          {uploaded?.fileName ? (
+            <div className="space-y-1 rounded-md border border-border/60 bg-muted/20 p-3 text-xs text-muted-foreground">
+              <p>Arquivo anexado: {uploaded.fileName}</p>
+              <p>Tipo: {uploaded.mimeType || "desconhecido"}</p>
+              <p>Tamanho: {formatFileSize(uploaded.size)}</p>
             </div>
           ) : null}
         </div>

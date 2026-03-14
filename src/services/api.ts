@@ -549,7 +549,13 @@ export const formsService = {
     submissionEndAt?: string;
     sections: SpeakerFormSection[];
   }> {
-    return apiClient.get(`/forms/speaker/public/${token}`);
+    return apiClient.get<{
+      title: string;
+      description?: string;
+      submissionStartAt?: string;
+      submissionEndAt?: string;
+      sections: SpeakerFormSection[];
+    }>(`/forms/speaker/public/${token}`);
   },
 
   async submitSpeakerPublicForm(
