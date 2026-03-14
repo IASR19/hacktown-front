@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -37,6 +37,7 @@ import {
   Loader2,
   Plus,
   RefreshCw,
+  GripVertical,
   RotateCcw,
   Save,
   Trash2,
@@ -171,6 +172,19 @@ function parseOptionsText(input: string): string[] {
     .filter(Boolean);
 }
 
+function bytesToMbString(value?: number): string {
+  if (!value || value <= 0) return "";
+  const mb = value / (1024 * 1024);
+  return Number.isInteger(mb) ? String(mb) : mb.toFixed(1);
+}
+
+function mbStringToBytes(value: string): number | undefined {
+  if (!value.trim()) return undefined;
+  const parsed = Number(value.replace(",", "."));
+  if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
+  return Math.round(parsed * 1024 * 1024);
+}
+
 export default function FormsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -186,6 +200,10 @@ export default function FormsPage() {
   const [selectedImagePreview, setSelectedImagePreview] = useState<
     string | null
   >(null);
+  const [draggedSectionId, setDraggedSectionId] = useState<string | null>(null);
+  const [autoSavingSchema, setAutoSavingSchema] = useState(false);
+  const skipSchemaAutosaveRef = useRef(true);
+  const schemaAutosaveSeqRef = useRef(0);
 
   const publicLink = useMemo(() => {
     if (!config?.publicToken) return "";
@@ -206,6 +224,7 @@ export default function FormsPage() {
       setDescription(configData.description || "");
       setSubmissionStartAt(toDateTimeLocal(configData.submissionStartAt));
       setSubmissionEndAt(toDateTimeLocal(configData.submissionEndAt));
+      skipSchemaAutosaveRef.current = true;
       setSections(configData.schemaJson || []);
       setOptionsDraft({});
     } catch (error) {
@@ -219,6 +238,41 @@ export default function FormsPage() {
   useEffect(() => {
     void loadData();
   }, []);
+
+  useEffect(() => {
+    if (loading) return;
+
+    if (skipSchemaAutosaveRef.current) {
+      skipSchemaAutosaveRef.current = false;
+      return;
+    }
+
+    const timeoutId = window.setTimeout(async () => {
+      const seq = ++schemaAutosaveSeqRef.current;
+
+      try {
+        setAutoSavingSchema(true);
+        const updated = await formsService.updateSpeakerConfig({ sections });
+
+        if (seq === schemaAutosaveSeqRef.current) {
+          setConfig(updated);
+        }
+      } catch (error) {
+        console.error(error);
+        toast.error(
+          "Não foi possível salvar automaticamente as alterações de estrutura",
+        );
+      } finally {
+        if (seq === schemaAutosaveSeqRef.current) {
+          setAutoSavingSchema(false);
+        }
+      }
+    }, 900);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [sections, loading]);
 
   const handleSave = async () => {
     try {
@@ -340,6 +394,7 @@ export default function FormsPage() {
       setDescription(updated.description || "");
       setSubmissionStartAt(toDateTimeLocal(updated.submissionStartAt));
       setSubmissionEndAt(toDateTimeLocal(updated.submissionEndAt));
+      skipSchemaAutosaveRef.current = true;
       setSections(updated.schemaJson || []);
       setOptionsDraft({});
       toast.success("Formulário padrão restaurado");
@@ -362,14 +417,25 @@ export default function FormsPage() {
   };
 
   const addSection = () => {
+    const defaultFieldId = `field-${Date.now()}`;
     const newSection: SpeakerFormSection = {
       id: `sec-${Date.now()}`,
       title: "Nova seção",
       description: "",
-      fields: [],
+      fields: [
+        {
+          id: defaultFieldId,
+          label: "Nova pergunta",
+          type: "short_text",
+          required: false,
+          placeholder: "",
+          helpText: "",
+          options: [],
+        },
+      ],
     };
 
-    setSections((prev) => [...prev, newSection]);
+    setSections((prev) => [newSection, ...prev]);
   };
 
   const updateSection = (
@@ -398,6 +464,56 @@ export default function FormsPage() {
       [copy[index], copy[target]] = [copy[target], copy[index]];
       return copy;
     });
+  };
+
+  const moveSectionToTarget = (sectionId: string, targetSectionId: string) => {
+    if (sectionId === targetSectionId) return;
+
+    setSections((prev) => {
+      const sourceIndex = prev.findIndex((section) => section.id === sectionId);
+      const targetIndex = prev.findIndex(
+        (section) => section.id === targetSectionId,
+      );
+
+      if (sourceIndex < 0 || targetIndex < 0) return prev;
+
+      const copy = [...prev];
+      const [moved] = copy.splice(sourceIndex, 1);
+      const adjustedTarget =
+        sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+      copy.splice(adjustedTarget, 0, moved);
+
+      return copy;
+    });
+  };
+
+  const handleSectionDragStart = (
+    event: DragEvent<HTMLDivElement>,
+    sectionId: string,
+  ) => {
+    setDraggedSectionId(sectionId);
+    event.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleSectionDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (!draggedSectionId) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+  };
+
+  const handleSectionDrop = (
+    event: DragEvent<HTMLDivElement>,
+    targetSectionId: string,
+  ) => {
+    event.preventDefault();
+    if (!draggedSectionId) return;
+
+    moveSectionToTarget(draggedSectionId, targetSectionId);
+    setDraggedSectionId(null);
+  };
+
+  const handleSectionDragEnd = () => {
+    setDraggedSectionId(null);
   };
 
   const addField = (sectionId: string) => {
@@ -477,12 +593,39 @@ export default function FormsPage() {
 
   const handleExportExcel = async () => {
     try {
-      const dynamicFields = (config?.schemaJson || []).flatMap((section) =>
+      const schemaForExport = sections.length
+        ? sections
+        : config?.schemaJson || [];
+
+      const dynamicFieldsFromSchema = schemaForExport.flatMap((section) =>
         (section.fields || []).map((field) => ({
           id: field.id,
           label: field.label,
         })),
       );
+
+      const knownFieldIds = new Set(
+        dynamicFieldsFromSchema.map((field) => field.id),
+      );
+
+      const dynamicFieldsFromAnswers: Array<{ id: string; label: string }> = [];
+
+      for (const submission of submissions) {
+        const answerKeys = Object.keys(submission.answersJson || {});
+        for (const key of answerKeys) {
+          if (knownFieldIds.has(key)) continue;
+          knownFieldIds.add(key);
+          dynamicFieldsFromAnswers.push({
+            id: key,
+            label: key,
+          });
+        }
+      }
+
+      const dynamicFields = [
+        ...dynamicFieldsFromSchema,
+        ...dynamicFieldsFromAnswers,
+      ];
 
       const rows = submissions.map((submission) => {
         const row: Record<string, string> = {
@@ -628,7 +771,14 @@ export default function FormsPage() {
 
               <div className="space-y-3 rounded-xl border border-border/70 bg-background/35 p-4">
                 <div className="flex items-center justify-between">
-                  <Label className="text-base">Estrutura do formulário</Label>
+                  <div>
+                    <Label className="text-base">Estrutura do formulário</Label>
+                    {autoSavingSchema && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Salvando automaticamente...
+                      </p>
+                    )}
+                  </div>
                   <Button
                     type="button"
                     variant="outline"
@@ -648,6 +798,8 @@ export default function FormsPage() {
                     {sections.map((section, sectionIndex) => (
                       <div
                         key={section.id}
+                        onDragOver={handleSectionDragOver}
+                        onDrop={(event) => handleSectionDrop(event, section.id)}
                         className={`rounded-xl border p-4 space-y-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] ${
                           sectionIndex % 2 === 0
                             ? "border-hacktown-cyan/25 bg-hacktown-cyan/5"
@@ -664,9 +816,22 @@ export default function FormsPage() {
                           >
                             Seção {sectionIndex + 1}
                           </span>
+
+                          <div
+                            draggable
+                            onDragStart={(event) =>
+                              handleSectionDragStart(event, section.id)
+                            }
+                            onDragEnd={handleSectionDragEnd}
+                            className="inline-flex items-center gap-1 rounded-md border border-border/70 bg-background/45 px-2 py-1 text-xs text-muted-foreground cursor-grab active:cursor-grabbing"
+                            title="Arraste para reordenar a seção"
+                          >
+                            <GripVertical className="h-3.5 w-3.5" />
+                            Arrastar
+                          </div>
                         </div>
 
-                        <div className="grid gap-3 md:grid-cols-2">
+                        <div className="grid gap-3">
                           <div className="space-y-2">
                             <Label>Título da seção</Label>
                             <Input
@@ -680,17 +845,6 @@ export default function FormsPage() {
                                     : section.id,
                                 });
                               }}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>ID da seção</Label>
-                            <Input
-                              value={section.id}
-                              onChange={(e) =>
-                                updateSection(section.id, {
-                                  id: slugifyId(e.target.value) || section.id,
-                                })
-                              }
                             />
                           </div>
                         </div>
@@ -744,6 +898,14 @@ export default function FormsPage() {
                         </div>
 
                         <div className="space-y-3">
+                          <div className="rounded-md border border-border/60 bg-background/40 p-3 text-xs text-muted-foreground">
+                            Preencha primeiro apenas: <strong>Pergunta</strong>,
+                            <strong> Tipo</strong>, <strong>Opções</strong>{" "}
+                            (quando houver) e se o campo é obrigatório. As
+                            demais configurações são opcionais e ficam em
+                            "Configurações avançadas".
+                          </div>
+
                           {section.fields.map((field, fieldIndex) => (
                             <div
                               key={`${section.id}-${field.id}-${fieldIndex}`}
@@ -764,24 +926,19 @@ export default function FormsPage() {
                                   <Label>Pergunta</Label>
                                   <Input
                                     value={field.label}
-                                    onChange={(e) =>
+                                    onChange={(e) => {
+                                      const labelValue = e.target.value;
                                       updateField(section.id, field.id, {
-                                        label: e.target.value,
-                                      })
-                                    }
+                                        label: labelValue,
+                                        id: field.id.startsWith("field-")
+                                          ? slugifyId(labelValue) || field.id
+                                          : field.id,
+                                      });
+                                    }}
                                   />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label>ID do campo</Label>
-                                  <Input
-                                    value={field.id}
-                                    onChange={(e) =>
-                                      updateField(section.id, field.id, {
-                                        id:
-                                          slugifyId(e.target.value) || field.id,
-                                      })
-                                    }
-                                  />
+                                  <p className="text-xs text-muted-foreground">
+                                    Este texto aparece para o participante.
+                                  </p>
                                 </div>
                                 <div className="space-y-2">
                                   <Label>Tipo</Label>
@@ -807,28 +964,10 @@ export default function FormsPage() {
                                       ))}
                                     </SelectContent>
                                   </Select>
-                                </div>
-                                <div className="space-y-2 md:col-span-2">
-                                  <Label>Placeholder</Label>
-                                  <Input
-                                    value={field.placeholder || ""}
-                                    onChange={(e) =>
-                                      updateField(section.id, field.id, {
-                                        placeholder: e.target.value,
-                                      })
-                                    }
-                                  />
-                                </div>
-                                <div className="space-y-2 md:col-span-2">
-                                  <Label>Ajuda</Label>
-                                  <Input
-                                    value={field.helpText || ""}
-                                    onChange={(e) =>
-                                      updateField(section.id, field.id, {
-                                        helpText: e.target.value,
-                                      })
-                                    }
-                                  />
+                                  <p className="text-xs text-muted-foreground">
+                                    Escolha o formato da resposta (texto,
+                                    seleção, upload etc.).
+                                  </p>
                                 </div>
 
                                 {(field.type === "multi_checkbox" ||
@@ -860,121 +999,212 @@ export default function FormsPage() {
                                       }}
                                       className="min-h-16"
                                     />
+                                    <p className="text-xs text-muted-foreground">
+                                      Exemplo: "IA, Design, Negócios".
+                                    </p>
                                   </div>
                                 )}
 
-                                {field.type === "file_image" && (
-                                  <div className="space-y-2 md:col-span-2">
-                                    <Label>Tamanho sugerido da imagem</Label>
-                                    <Input
-                                      value={field.imageSizeHint || ""}
-                                      onChange={(e) =>
-                                        updateField(section.id, field.id, {
-                                          imageSizeHint: e.target.value,
-                                        })
-                                      }
-                                      placeholder="Ex.: 900x900"
-                                    />
-                                  </div>
-                                )}
+                                <details className="md:col-span-2 rounded-md border border-border/60 bg-background/35 p-3">
+                                  <summary className="cursor-pointer text-sm font-medium text-foreground">
+                                    Configurações avançadas (opcional)
+                                  </summary>
+                                  <p className="mt-2 text-xs text-muted-foreground">
+                                    Use esta área apenas se quiser ajustes
+                                    finos. Se tiver dúvida, pode deixar tudo em
+                                    branco.
+                                  </p>
 
-                                {(field.type === "file_upload" ||
-                                  field.type === "file_image") && (
-                                  <>
-                                    <div className="space-y-2">
-                                      <Label>Tipos de arquivo (vírgula)</Label>
+                                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                                    <div className="space-y-2 md:col-span-2">
+                                      <Label>Placeholder</Label>
                                       <Input
-                                        value={(field.fileTypes || []).join(
-                                          ", ",
-                                        )}
+                                        value={field.placeholder || ""}
                                         onChange={(e) =>
                                           updateField(section.id, field.id, {
-                                            fileTypes: e.target.value
-                                              .split(",")
-                                              .map((value) => value.trim())
-                                              .filter(Boolean),
+                                            placeholder: e.target.value,
                                           })
                                         }
-                                        placeholder="image/jpeg, image/png"
                                       />
+                                      <p className="text-xs text-muted-foreground">
+                                        Texto de exemplo dentro do campo. Ex.:
+                                        "Digite seu nome completo".
+                                      </p>
                                     </div>
-                                    <div className="space-y-2">
-                                      <Label>Tamanho máximo (bytes)</Label>
+
+                                    <div className="space-y-2 md:col-span-2">
+                                      <Label>Ajuda</Label>
                                       <Input
-                                        type="number"
-                                        value={field.maxFileSize ?? ""}
+                                        value={field.helpText || ""}
                                         onChange={(e) =>
                                           updateField(section.id, field.id, {
-                                            maxFileSize: e.target.value
+                                            helpText: e.target.value,
+                                          })
+                                        }
+                                      />
+                                      <p className="text-xs text-muted-foreground">
+                                        Mensagem curta para orientar o
+                                        participante abaixo da pergunta.
+                                      </p>
+                                    </div>
+
+                                    {(field.type === "file_upload" ||
+                                      field.type === "file_image") && (
+                                      <>
+                                        <div className="space-y-2">
+                                          <Label>
+                                            Tipos de arquivo permitidos
+                                          </Label>
+                                          <Input
+                                            value={(field.fileTypes || []).join(
+                                              ", ",
+                                            )}
+                                            onChange={(e) =>
+                                              updateField(
+                                                section.id,
+                                                field.id,
+                                                {
+                                                  fileTypes: e.target.value
+                                                    .split(",")
+                                                    .map((value) =>
+                                                      value.trim(),
+                                                    )
+                                                    .filter(Boolean),
+                                                },
+                                              )
+                                            }
+                                            placeholder="image/jpeg, image/png"
+                                          />
+                                          <p className="text-xs text-muted-foreground">
+                                            Separe por vírgula. Ex.: image/png,
+                                            application/pdf.
+                                          </p>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                          <Label>Tamanho máximo (MB)</Label>
+                                          <Input
+                                            type="number"
+                                            step="0.1"
+                                            value={bytesToMbString(
+                                              field.maxFileSize,
+                                            )}
+                                            onChange={(e) =>
+                                              updateField(
+                                                section.id,
+                                                field.id,
+                                                {
+                                                  maxFileSize: mbStringToBytes(
+                                                    e.target.value,
+                                                  ),
+                                                },
+                                              )
+                                            }
+                                            placeholder="Ex.: 10"
+                                          />
+                                          <p className="text-xs text-muted-foreground">
+                                            Ex.: 10 = 10 MB.
+                                          </p>
+                                        </div>
+                                      </>
+                                    )}
+
+                                    {field.type === "file_image" && (
+                                      <div className="space-y-2 md:col-span-2">
+                                        <Label>
+                                          Tamanho sugerido da imagem
+                                        </Label>
+                                        <Input
+                                          value={field.imageSizeHint || ""}
+                                          onChange={(e) =>
+                                            updateField(section.id, field.id, {
+                                              imageSizeHint: e.target.value,
+                                            })
+                                          }
+                                          placeholder="Ex.: 900x900"
+                                        />
+                                        <p className="text-xs text-muted-foreground">
+                                          Dica visual para o participante. Não
+                                          bloqueia envio automaticamente.
+                                        </p>
+                                      </div>
+                                    )}
+
+                                    <div className="space-y-2">
+                                      <Label>Mínimo de caracteres</Label>
+                                      <Input
+                                        type="number"
+                                        value={field.minLength ?? ""}
+                                        onChange={(e) =>
+                                          updateField(section.id, field.id, {
+                                            minLength: e.target.value
                                               ? Number(e.target.value)
                                               : undefined,
                                           })
                                         }
                                       />
+                                      <p className="text-xs text-muted-foreground">
+                                        Só vale para respostas em texto.
+                                      </p>
                                     </div>
-                                  </>
-                                )}
 
-                                <div className="space-y-2">
-                                  <Label>Min caracteres</Label>
-                                  <Input
-                                    type="number"
-                                    value={field.minLength ?? ""}
-                                    onChange={(e) =>
-                                      updateField(section.id, field.id, {
-                                        minLength: e.target.value
-                                          ? Number(e.target.value)
-                                          : undefined,
-                                      })
-                                    }
-                                  />
-                                </div>
+                                    <div className="space-y-2">
+                                      <Label>Máximo de caracteres</Label>
+                                      <Input
+                                        type="number"
+                                        value={field.maxLength ?? ""}
+                                        onChange={(e) =>
+                                          updateField(section.id, field.id, {
+                                            maxLength: e.target.value
+                                              ? Number(e.target.value)
+                                              : undefined,
+                                          })
+                                        }
+                                      />
+                                      <p className="text-xs text-muted-foreground">
+                                        Só vale para respostas em texto.
+                                      </p>
+                                    </div>
 
-                                <div className="space-y-2">
-                                  <Label>Max caracteres</Label>
-                                  <Input
-                                    type="number"
-                                    value={field.maxLength ?? ""}
-                                    onChange={(e) =>
-                                      updateField(section.id, field.id, {
-                                        maxLength: e.target.value
-                                          ? Number(e.target.value)
-                                          : undefined,
-                                      })
-                                    }
-                                  />
-                                </div>
+                                    <div className="space-y-2 md:col-span-2">
+                                      <Label>Regex de validação</Label>
+                                      <Input
+                                        value={field.validation?.regex || ""}
+                                        onChange={(e) =>
+                                          updateField(section.id, field.id, {
+                                            validation: {
+                                              ...(field.validation || {}),
+                                              regex:
+                                                e.target.value || undefined,
+                                            },
+                                          })
+                                        }
+                                      />
+                                      <p className="text-xs text-muted-foreground">
+                                        Avançado técnico: use apenas se souber
+                                        expressão regular.
+                                      </p>
+                                    </div>
 
-                                <div className="space-y-2 md:col-span-2">
-                                  <Label>Regex de validação (opcional)</Label>
-                                  <Input
-                                    value={field.validation?.regex || ""}
-                                    onChange={(e) =>
-                                      updateField(section.id, field.id, {
-                                        validation: {
-                                          ...(field.validation || {}),
-                                          regex: e.target.value || undefined,
-                                        },
-                                      })
-                                    }
-                                  />
-                                </div>
-
-                                <div className="space-y-2 md:col-span-2">
-                                  <Label>Mensagem de erro regex</Label>
-                                  <Input
-                                    value={field.validation?.regexMessage || ""}
-                                    onChange={(e) =>
-                                      updateField(section.id, field.id, {
-                                        validation: {
-                                          ...(field.validation || {}),
-                                          regexMessage:
-                                            e.target.value || undefined,
-                                        },
-                                      })
-                                    }
-                                  />
-                                </div>
+                                    <div className="space-y-2 md:col-span-2">
+                                      <Label>Mensagem de erro da regex</Label>
+                                      <Input
+                                        value={
+                                          field.validation?.regexMessage || ""
+                                        }
+                                        onChange={(e) =>
+                                          updateField(section.id, field.id, {
+                                            validation: {
+                                              ...(field.validation || {}),
+                                              regexMessage:
+                                                e.target.value || undefined,
+                                            },
+                                          })
+                                        }
+                                      />
+                                    </div>
+                                  </div>
+                                </details>
 
                                 <div className="flex items-center gap-2 md:col-span-2">
                                   <Checkbox
